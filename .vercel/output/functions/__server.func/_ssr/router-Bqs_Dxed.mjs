@@ -9,7 +9,7 @@ import "../_libs/firebase.mjs";
 import { a as signInWithEmailAndPassword, c as updateProfile, i as onAuthStateChanged, n as createUserWithEmailAndPassword, o as signInWithPopup, r as getAuth, s as signOut, t as GoogleAuthProvider } from "../_libs/firebase__auth.mjs";
 import { a as ref, c as update, i as push, n as getDatabase, o as remove, r as onValue, s as set, t as get } from "../_libs/@firebase/database+[...].mjs";
 import { t as Toaster } from "../_libs/sonner.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-BS4cpdQj.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-Bqs_Dxed.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -2682,7 +2682,7 @@ function SessionGate({ children }) {
 	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children });
 }
-var $$splitComponentImporter$3 = () => import("./routes-D1lAd_7q.mjs");
+var $$splitComponentImporter$3 = () => import("./routes-BQ6_6-_D.mjs");
 var Route$3 = createFileRoute("/")({
 	head: () => ({ meta: [
 		{ title: "Bolo" },
@@ -2701,12 +2701,12 @@ var Route$3 = createFileRoute("/")({
 	] }),
 	component: lazyRouteComponent($$splitComponentImporter$3, "component")
 });
-var $$splitComponentImporter$2 = () => import("./auth-Bg_itTXs.mjs");
+var $$splitComponentImporter$2 = () => import("./auth-DA_9uY3t.mjs");
 var Route$2 = createFileRoute("/auth")({
 	head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
 	component: lazyRouteComponent($$splitComponentImporter$2, "component")
 });
-var $$splitComponentImporter$1 = () => import("./explore-BXGP3kL-.mjs");
+var $$splitComponentImporter$1 = () => import("./explore-B5iwH7RG.mjs");
 var Route$1 = createFileRoute("/explore")({
 	head: () => ({ meta: [
 		{ title: "Explore issues — Bolo" },
@@ -2725,7 +2725,7 @@ var Route$1 = createFileRoute("/explore")({
 	] }),
 	component: lazyRouteComponent($$splitComponentImporter$1, "component")
 });
-var $$splitComponentImporter = () => import("./raise-C2HskGJi.mjs");
+var $$splitComponentImporter = () => import("./raise-CV6BSy8j.mjs");
 var Route = createFileRoute("/raise")({
 	head: () => ({ meta: [
 		{ title: "Raise an issue — Bolo" },

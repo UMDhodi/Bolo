@@ -226,19 +226,15 @@ function AuthPage() {
                     </div>
                   )}
                 </>
-              ) : 
+              ) : null}
               --------------------------------------------------------- */}
-              (
-                <>
-                  {mode === "signup" && (
-                    <Field label="Your name" type="text" autoComplete="name" value={name} onChange={setName} placeholder="e.g. Aditi Sharma" required />
-                  )}
-                  <Field label="Email address" type="email" autoComplete="email" value={email} onChange={setEmail} placeholder="you@example.com" required />
-                  <Field label="Password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={setPassword} placeholder="At least 6 characters" required />
-                  {mode === "signup" && <Field label="Confirm password" type="password" autoComplete="new-password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Repeat your password" required />}
-                </>
-              )
-              {/* } */}
+
+              {mode === "signup" && (
+                <Field label="Your name" type="text" autoComplete="name" value={name} onChange={setName} placeholder="e.g. Aditi Sharma" required />
+              )}
+              <Field label="Email address" type="email" autoComplete="email" value={email} onChange={setEmail} placeholder="you@example.com" required />
+              <Field label="Password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={setPassword} placeholder="At least 6 characters" required />
+              {mode === "signup" && <Field label="Confirm password" type="password" autoComplete="new-password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Repeat your password" required />}
 
               <div id="recaptcha-container" />
 

@@ -2,10 +2,10 @@ import { i as __toESM } from "../_runtime.mjs";
 import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
 import { p as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { i as createBoloAccount, l as signInToBolo, o as getFirebaseErrorMessage, r as useAuth, u as signInWithGoogle } from "./router-BS4cpdQj.mjs";
+import { i as createBoloAccount, l as signInToBolo, o as getFirebaseErrorMessage, r as useAuth, u as signInWithGoogle } from "./router-Bqs_Dxed.mjs";
 import { t as SpinnerToCheck } from "./loader-64uLEdom.mjs";
 import { m as MapPin, o as Sparkles } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/auth-Bg_itTXs.js
+//#region node_modules/.nitro/vite/services/ssr/assets/auth-DA_9uY3t.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var bolo_auth_civic_india_default = "/assets/bolo-auth-civic-india-EEDA0VFx.png";
@@ -198,46 +198,42 @@ function AuthPage() {
 						className: "space-y-2.5",
 						noValidate: true,
 						children: [
-							"(",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-								mode === "signup" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-									label: "Your name",
-									type: "text",
-									autoComplete: "name",
-									value: name,
-									onChange: setName,
-									placeholder: "e.g. Aditi Sharma",
-									required: true
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-									label: "Email address",
-									type: "email",
-									autoComplete: "email",
-									value: email,
-									onChange: setEmail,
-									placeholder: "you@example.com",
-									required: true
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-									label: "Password",
-									type: "password",
-									autoComplete: mode === "signup" ? "new-password" : "current-password",
-									value: password,
-									onChange: setPassword,
-									placeholder: "At least 6 characters",
-									required: true
-								}),
-								mode === "signup" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-									label: "Confirm password",
-									type: "password",
-									autoComplete: "new-password",
-									value: confirmPassword,
-									onChange: setConfirmPassword,
-									placeholder: "Repeat your password",
-									required: true
-								})
-							] }),
-							")",
+							mode === "signup" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+								label: "Your name",
+								type: "text",
+								autoComplete: "name",
+								value: name,
+								onChange: setName,
+								placeholder: "e.g. Aditi Sharma",
+								required: true
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+								label: "Email address",
+								type: "email",
+								autoComplete: "email",
+								value: email,
+								onChange: setEmail,
+								placeholder: "you@example.com",
+								required: true
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+								label: "Password",
+								type: "password",
+								autoComplete: mode === "signup" ? "new-password" : "current-password",
+								value: password,
+								onChange: setPassword,
+								placeholder: "At least 6 characters",
+								required: true
+							}),
+							mode === "signup" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+								label: "Confirm password",
+								type: "password",
+								autoComplete: "new-password",
+								value: confirmPassword,
+								onChange: setConfirmPassword,
+								placeholder: "Repeat your password",
+								required: true
+							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "recaptcha-container" }),
 							error && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								role: "alert",
