@@ -1,0 +1,18 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "issues": {
+      ".read": true,
+      "$issueId": {
+        ".write": "auth != null && !data.exists() && newData.child('reporterId').val() === auth.uid"
+      }
+    }
+  }
+}
