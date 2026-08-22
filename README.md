@@ -1,9 +1,10 @@
 ﻿<div align="center">
 
-# 🗣️ Bolo — Civic Connect
+# <img src="https://github.com/UMDhodi/Bolo/blob/main/public/logo.png" width="45" align="center" valign="middle"> Bolo The Civic Connect
 
 **Report. Explore. Follow. Civic issues on a live map.**
 
+![Built with OpenAI Codex](https://img.shields.io/badge/built%20with-OpenAI%20Codex-111827)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000?logo=vercel&logoColor=white)](https://vercel.com)
 [![Built with React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
 [![TanStack Router](https://img.shields.io/badge/TanStack-Router%20%26%20Query-FF4154?logo=reactquery&logoColor=white)](https://tanstack.com)
@@ -11,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
-> A citizen-facing prototype for reporting and tracking municipal issues — road damage, streetlights, drainage, garbage, water leaks, and public spaces — on a live interactive map.
+> A citizen-facing prototype for reporting and tracking municipal issues road damage, streetlights, drainage, garbage, water leaks, and public spaces on a live interactive map.
 
 </div>
 
