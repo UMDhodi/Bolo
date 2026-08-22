@@ -21,7 +21,7 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-type Mode = "signup" | "signin" | "phone";
+type Mode = "signup" | "signin"; // Note: "phone" mode commented out until Firebase Blaze plan is activated
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -33,31 +33,18 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Phone OTP state
+  /* =========================================================================
+   * PHONE OTP AUTHENTICATION (TEMPORARILY COMMENTED OUT)
+   * To re-enable when upgraded to Firebase Blaze Plan:
+   * 1. Add "phone" back to type Mode = "signup" | "signin" | "phone"
+   * 2. Uncomment the phone state, handleSendOTP, handleVerifyOTP functions below
+   * 3. Uncomment the Phone tab in the tablist (and change grid-cols-2 back to grid-cols-3)
+   * 4. Uncomment the phone form UI branch in submit() and in JSX
+   * =========================================================================
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [verifier, setVerifier] = useState<RecaptchaVerifier | null>(null);
-
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (user) void navigate({ to: "/" });
-  }, [navigate, user]);
-
-  async function handleGoogleAuth() {
-    setError(null);
-    setPending(true);
-    try {
-      await signInWithGoogle();
-      await navigate({ to: "/" });
-    } catch (err) {
-      setError(getFirebaseErrorMessage(err));
-    } finally {
-      setPending(false);
-    }
-  }
 
   async function handleSendOTP() {
     setError(null);
@@ -101,6 +88,27 @@ function AuthPage() {
       setPending(false);
     }
   }
+  ========================================================================= */
+
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (user) void navigate({ to: "/" });
+  }, [navigate, user]);
+
+  async function handleGoogleAuth() {
+    setError(null);
+    setPending(true);
+    try {
+      await signInWithGoogle();
+      await navigate({ to: "/" });
+    } catch (err) {
+      setError(getFirebaseErrorMessage(err));
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -110,7 +118,8 @@ function AuthPage() {
       return;
     }
 
-    if (mode === "phone") {
+    /* --- Phone OTP Submit Handler (Uncomment when on Blaze plan) ---
+    if ((mode as string) === "phone") {
       if (!otpSent) {
         await handleSendOTP();
       } else {
@@ -118,6 +127,7 @@ function AuthPage() {
       }
       return;
     }
+    ----------------------------------------------------------------- */
 
     if (mode === "signup") {
       if (name.trim().length < 2) return setError("Enter your name.");
@@ -128,7 +138,7 @@ function AuthPage() {
     setPending(true);
     try {
       if (mode === "signup") {
-        await createBoloAccount({ displayName: name.trim(), phone: "", email, password });
+        await createBoloAccount({ displayName: name.trim(), phone: phone.trim(), email, password });
       } else {
         await signInToBolo(email, password);
       }
@@ -157,13 +167,15 @@ function AuthPage() {
           <div>
             <div className="mb-3 flex items-center gap-3 lg:hidden"><span className="grid size-9 place-items-center rounded-2xl bg-primary text-primary-foreground"><img src="/logo.png" alt="Bolo logo" className="size-10 object-cover" aria-hidden="true" /></span><span className="font-display text-2xl font-bold">Bolo</span></div>
             <p className="text-xs font-bold tracking-wider text-primary uppercase">Civic connect</p>
-            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">{mode === "signup" ? "Join the change." : mode === "phone" ? "Mobile Login" : "Welcome back."}</h1>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mode === "signup" ? "Create your Bolo account to report and follow issues in your area." : mode === "phone" ? "Sign in quickly using an OTP sent to your Indian mobile number." : "Sign in to report issues and keep track of your community."}</p>
+            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">{mode === "signup" ? "Join the change." : "Welcome back."}</h1>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mode === "signup" ? "Create your Bolo account to report and follow issues in your area." : "Sign in to report issues and keep track of your community."}</p>
 
-            <div className="mt-3 grid grid-cols-3 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication">
-              <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => { setMode("signup"); setError(null); setOtpSent(false); }} className={`min-h-9 rounded-xl text-xs font-bold transition-colors ${mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground"}`}>Create account</button>
-              <button type="button" role="tab" aria-selected={mode === "signin"} onClick={() => { setMode("signin"); setError(null); setOtpSent(false); }} className={`min-h-9 rounded-xl text-xs font-bold transition-colors ${mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground"}`}>Sign in</button>
-              <button type="button" role="tab" aria-selected={mode === "phone"} onClick={() => { setMode("phone"); setError(null); setOtpSent(false); }} className={`min-h-9 rounded-xl text-xs font-bold transition-colors ${mode === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground"}`}>Phone</button>
+            <div className="mt-3 grid grid-cols-2 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication">
+              <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => { setMode("signup"); setError(null); }} className={`min-h-9 rounded-xl text-xs font-bold transition-colors ${mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground"}`}>Create account</button>
+              <button type="button" role="tab" aria-selected={mode === "signin"} onClick={() => { setMode("signin"); setError(null); }} className={`min-h-9 rounded-xl text-xs font-bold transition-colors ${mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground"}`}>Sign in</button>
+              {/* Phone Tab (Uncomment when upgraded to Firebase Blaze plan):
+              <button type="button" role="tab" aria-selected={(mode as string) === "phone"} onClick={() => { setMode("phone" as Mode); setError(null); setOtpSent(false); }} className={`min-h-9 rounded-xl text-xs font-bold transition-colors ${(mode as string) === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground"}`}>Phone</button>
+              */}
             </div>
 
             <div className="mt-3">
@@ -189,7 +201,8 @@ function AuthPage() {
             </div>
 
             <form onSubmit={submit} className="space-y-2.5" noValidate>
-              {mode === "phone" ? (
+              {/* --- Phone OTP Form UI (Uncomment when on Blaze plan) ---
+              {(mode as string) === "phone" ? (
                 <>
                   {!otpSent ? (
                     <>
@@ -213,7 +226,9 @@ function AuthPage() {
                     </div>
                   )}
                 </>
-              ) : (
+              ) : 
+              --------------------------------------------------------- */}
+              (
                 <>
                   {mode === "signup" && (
                     <Field label="Your name" type="text" autoComplete="name" value={name} onChange={setName} placeholder="e.g. Aditi Sharma" required />
@@ -222,7 +237,8 @@ function AuthPage() {
                   <Field label="Password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={setPassword} placeholder="At least 6 characters" required />
                   {mode === "signup" && <Field label="Confirm password" type="password" autoComplete="new-password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Repeat your password" required />}
                 </>
-              )}
+              )
+              {/* } */}
 
               <div id="recaptcha-container" />
 
@@ -232,7 +248,7 @@ function AuthPage() {
                 {pending ? (
                   <SpinnerToCheck size={20} color="#ffffff" bg="#6d28d9" />
                 ) : null}
-                {pending ? "Please wait…" : mode === "phone" ? (otpSent ? "Verify & Sign in" : "Send OTP") : mode === "signup" ? "Create my Bolo ID" : "Sign in to Bolo"}
+                {pending ? "Please wait…" : mode === "signup" ? "Create my Bolo ID" : "Sign in to Bolo"}
               </button>
             </form>
           </div>

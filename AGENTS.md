@@ -10,5 +10,21 @@
 - Multilingual translations are managed in `src/lib/i18n.ts` using the reactive `useT()` hook.
 - All interactive overlays and dialogs use high z-index isolation to coexist with Leaflet maps.
 
-<!-- CODEX:TAGS: openai, codex, react, typescript, vite, tanstack-router, tailwindcss, firebase, leaflet -->
+### Firebase Phone OTP Authentication (Disabled for Spark Plan)
+> [!IMPORTANT]
+> **Status:** Phone OTP is temporarily commented out in the UI because Firebase SMS requires the **Blaze (Pay-as-you-go) Plan** and configured SMS Region policy for India (+91).
+> 
+> **Files involved:**
+> - [src/routes/auth.tsx](file:///c:/Users/mayan/OneDrive/Desktop/Hackthon/Bolo%20Civic%20Connect/src/routes/auth.tsx): Contains the commented-out `phone` mode, `handleSendOTP()`, `handleVerifyOTP()`, and the Phone tab UI.
+> - [src/lib/firebase.ts](file:///c:/Users/mayan/OneDrive/Desktop/Hackthon/Bolo%20Civic%20Connect/src/lib/firebase.ts): Contains the active underlying helper functions `createRecaptchaVerifier()`, `sendPhoneOTP()`, and `verifyPhoneOTP()`.
+> 
+> **How to Re-Enable when on Blaze Plan:**
+> 1. In Firebase Console → Authentication → Sign-in method → Ensure **Phone** is Enabled and **SMS Region Policy** allows India (+91).
+> 2. In `src/routes/auth.tsx`:
+>    - Set `type Mode = "signup" | "signin" | "phone";`
+>    - Uncomment the Phone state & handlers (`otpSent`, `handleSendOTP`, `handleVerifyOTP`).
+>    - Uncomment the Phone tab in the tab switcher (change `grid-cols-2` to `grid-cols-3`).
+>    - Uncomment the Phone form section in `submit()` and the JSX form body.
+
+<!-- CODEX:TAGS: openai, codex, react, typescript, vite, tanstack-router, tailwindcss, firebase, leaflet, phone-otp -->
 <!-- CODEX:END -->
