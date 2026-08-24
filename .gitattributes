@@ -1,0 +1,20 @@
+# Auto detect text files and perform LF normalization on checkin
+* text=auto eol=lf
+
+# Explicitly declare text files you want to always be normalized:
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary

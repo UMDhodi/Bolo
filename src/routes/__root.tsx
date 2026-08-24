@@ -9,7 +9,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { LanguageProvider } from "../components/language-context";
@@ -41,18 +41,33 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error("TanStack Router ErrorComponent caught:", error);
   const router = useRouter();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-xl text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+
+        {error ? (
+          <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-left">
+            <p className="text-xs font-bold text-destructive">Error Details:</p>
+            <p className="mt-1 font-mono text-xs text-destructive break-all">
+              {error.message || String(error)}
+            </p>
+            {error.stack ? (
+              <pre className="mt-2 max-h-32 overflow-auto font-mono text-[10px] text-muted-foreground">
+                {error.stack}
+              </pre>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -155,14 +170,21 @@ function SessionGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isNavigatingRef = useRef(false);
 
   useEffect(() => {
     if (loading) return;
-    if (user && pathname === "/auth") {
-      void navigate({ to: "/", replace: true });
+    if (user && pathname === "/auth" && !isNavigatingRef.current) {
+      isNavigatingRef.current = true;
+      void navigate({ to: "/", replace: true }).finally(() => {
+        isNavigatingRef.current = false;
+      });
     }
-    if (!user && pathname !== "/auth" && pathname !== "/waitlist") {
-      void navigate({ to: "/auth", replace: true });
+    if (!user && pathname !== "/auth" && pathname !== "/waitlist" && !isNavigatingRef.current) {
+      isNavigatingRef.current = true;
+      void navigate({ to: "/auth", replace: true }).finally(() => {
+        isNavigatingRef.current = false;
+      });
     }
   }, [loading, navigate, pathname, user]);
 

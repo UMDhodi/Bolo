@@ -94,10 +94,6 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    if (user) void navigate({ to: "/" });
-  }, [navigate, user]);
-
   async function handleGoogleAuth() {
     setError(null);
     setPending(true);
