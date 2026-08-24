@@ -25,13 +25,13 @@ import { deleteIssue, getFirebaseErrorMessage, subscribeToIssues } from "@/lib/f
 export const Route = createFileRoute("/explore")({
   head: () => ({
     meta: [
-      { title: "Explore issues — Bolo" },
+      { title: "Explore issues" },
       {
         name: "description",
         content:
           "A visual feed of civic complaints reported across Indian towns and cities, with status and reporter details.",
       },
-      { property: "og:title", content: "Explore issues — Bolo" },
+      { property: "og:title", content: "Explore issues" },
       {
         property: "og:description",
         content: "Browse a photo-led feed of neighbourhood issues and their progress.",

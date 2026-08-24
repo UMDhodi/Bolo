@@ -20,13 +20,13 @@ import type { TranslationDict } from "@/lib/i18n";
 export const Route = createFileRoute("/raise")({
   head: () => ({
     meta: [
-      { title: "Raise an issue — Bolo" },
+      { title: "Raise an issue" },
       {
         name: "description",
         content:
           "Report a civic issue with photos, location, address and a detailed description in your preferred language.",
       },
-      { property: "og:title", content: "Raise an issue — Bolo" },
+      { property: "og:title", content: "Raise an issue" },
       {
         property: "og:description",
         content: "Share what needs attention in your area with photos and clear details.",
