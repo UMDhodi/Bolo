@@ -67,12 +67,12 @@ export type NewIssue = {
 };
 
 const firebaseConfig = {
-  apiKey: import.meta.env["VITE_FIREBASE_API_KEY"] || "AIzaSyBoloCivicConnectDemoKeyDummy123",
+  apiKey: import.meta.env["VITE_FIREBASE_API_KEY"] || "AIzaSyCvxZOCzHIzVOpDYfffxnKUJmyZbdO6o-0",
   authDomain: import.meta.env["VITE_FIREBASE_AUTH_DOMAIN"] || "bolo-civic-connect.firebaseapp.com",
-  databaseURL: import.meta.env["VITE_FIREBASE_DATABASE_URL"] || "https://bolo-civic-connect-default-rtdb.firebaseio.com",
+  databaseURL: import.meta.env["VITE_FIREBASE_DATABASE_URL"] || "https://bolo-civic-connect-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: import.meta.env["VITE_FIREBASE_PROJECT_ID"] || "bolo-civic-connect",
-  storageBucket: import.meta.env["VITE_FIREBASE_STORAGE_BUCKET"] || "bolo-civic-connect.appspot.com",
-  appId: import.meta.env["VITE_FIREBASE_APP_ID"] || "1:1234567890:web:abcdef123456",
+  storageBucket: import.meta.env["VITE_FIREBASE_STORAGE_BUCKET"] || "bolo-civic-connect.firebasestorage.app",
+  appId: import.meta.env["VITE_FIREBASE_APP_ID"] || "1:68250444341:web:130a5209df8d13b92c877c",
 };
 
 export const isFirebaseConfigured = true;
