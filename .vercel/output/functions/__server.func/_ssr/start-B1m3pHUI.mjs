@@ -1,4 +1,4 @@
-import { n as createCsrfMiddleware, r as createMiddleware } from "./server-C11NYt3R.mjs";
+import { n as createCsrfMiddleware, r as createMiddleware } from "./server-1akK5dB_.mjs";
 import { t as renderErrorPage } from "./ssr.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/start-B1m3pHUI.js
 function dedupeSerializationAdapters(deduped, serializationAdapters) {

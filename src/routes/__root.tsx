@@ -105,6 +105,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Gabarito:wght@500;600;700;800&family=Nunito+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
       },
+      {
+        rel: "stylesheet",
+        href: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
@@ -157,7 +161,7 @@ function SessionGate({ children }: { children: ReactNode }) {
     if (user && pathname === "/auth") {
       void navigate({ to: "/", replace: true });
     }
-    if (!user && pathname !== "/auth") {
+    if (!user && pathname !== "/auth" && pathname !== "/waitlist") {
       void navigate({ to: "/auth", replace: true });
     }
   }, [loading, navigate, pathname, user]);
@@ -166,6 +170,24 @@ function SessionGate({ children }: { children: ReactNode }) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-4">
         <p className="text-sm font-semibold text-muted-foreground">Checking your Bolo session…</p>
+      </div>
+    );
+  }
+
+  // If unauthenticated and on a protected route, show transition state while redirecting
+  if (!user && pathname !== "/auth" && pathname !== "/waitlist") {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background px-4">
+        <p className="text-sm font-semibold text-muted-foreground">Redirecting to sign in…</p>
+      </div>
+    );
+  }
+
+  // If authenticated and on /auth, show transition state while redirecting home
+  if (user && pathname === "/auth") {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background px-4">
+        <p className="text-sm font-semibold text-muted-foreground">Redirecting to home…</p>
       </div>
     );
   }
