@@ -6,6 +6,7 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
   RecaptchaVerifier,
@@ -30,6 +31,8 @@ import {
 } from "firebase/database";
 import { SEED_ISSUES, type Issue } from "./mock-data";
 import { resolveLocationCoordinates } from "./location-resolver";
+import { sanitizeInput, validateStrongPassword } from "./utils";
+import { logSecurityEvent } from "./security-logger";
 
 export type BoloUser = {
   uid: string;
@@ -152,7 +155,7 @@ function message(error: unknown) {
   if (error.message.includes("auth/too-many-requests")) return "Too many requests. Please wait a moment before trying again.";
   if (error.message.includes("auth/email-already-in-use")) return "This email is already registered. Try signing in.";
   if (error.message.includes("auth/invalid-credential") || error.message.includes("auth/user-not-found") || error.message.includes("auth/wrong-password")) return "Email or password is incorrect.";
-  if (error.message.includes("auth/weak-password")) return "Choose a password with at least 6 characters.";
+  if (error.message.includes("auth/weak-password")) return "Password must be at least 8 characters long with uppercase, lowercase, numbers, and special characters.";
   if (error.message.includes("auth/invalid-verification-code")) return "Invalid OTP code. Please check and try again.";
   if (error.message.includes("max-connections") || error.message.includes("connection-limit")) return "Server is experiencing high traffic (maximum 100 simultaneous users reached). Retrying...";
   return error.message.replace("Firebase: ", "");
@@ -164,6 +167,13 @@ export async function createBoloAccount(input: {
   email: string;
   password: string;
 }) {
+  const pwdValidation = validateStrongPassword(input.password);
+  if (!pwdValidation.valid) {
+    throw new Error(
+      `Password does not meet security policy: ${pwdValidation.errors.join(", ")}.`
+    );
+  }
+
   const credential = await createUserWithEmailAndPassword(auth, input.email, input.password);
   await updateProfile(credential.user, { displayName: input.displayName });
   try {
@@ -280,12 +290,61 @@ export function observeBoloAuth(callback: (user: BoloUser | null) => void) {
   return onAuthStateChanged(auth, (user: User | null) => callback(user ? toBoloUser(user) : null));
 }
 
+// ── File Upload Security: Magic Byte & Extension Verification ──────────────
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/jpg"]);
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per file limit
+
+async function validateImageMagicBytes(file: File): Promise<boolean> {
+  try {
+    const buffer = await file.slice(0, 8).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length < 4) return false;
+
+    // JPEG: FF D8 FF
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return true;
+    // PNG: 89 50 4E 47
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return true;
+    // WebP / RIFF: 52 49 46 46
+    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return true;
+    // GIF: 47 49 46 38
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 async function compressImageToBase64(file: File, maxWidth = 800, quality = 0.7): Promise<string> {
-  return new Promise((resolve) => {
+  // 1. File Size Verification (CWE-400 / Resource Exhaustion)
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error("File exceeds maximum allowed size (10 MB).");
+  }
+
+  // 2. MIME Type Validation
+  if (!ALLOWED_MIME_TYPES.has(file.type.toLowerCase())) {
+    throw new Error("Invalid file format. Only JPG, PNG, and WebP images are permitted.");
+  }
+
+  // 3. File Signature / Magic Byte Header Verification
+  const isValidSignature = await validateImageMagicBytes(file);
+  if (!isValidSignature) {
+    throw new Error("File content does not match genuine image signature.");
+  }
+
+  // 4. Image Re-Encoding via Canvas (Strips all malicious EXIF, embedded scripts, and polyglots)
+  return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
+
+      // Anti-Image Decompression Bomb (Pixel Flood DoS protection)
+      if (img.naturalWidth > 8192 || img.naturalHeight > 8192) {
+        reject(new Error("Image dimensions exceed the safety limit (8192x8192)."));
+        return;
+      }
+
       const canvas = document.createElement("canvas");
       let { width, height } = img;
       if (width > maxWidth) {
@@ -299,15 +358,12 @@ async function compressImageToBase64(file: File, maxWidth = 800, quality = 0.7):
         ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL("image/jpeg", quality));
       } else {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
+        reject(new Error("Unable to create canvas context for image re-encoding."));
       }
     };
     img.onerror = () => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to decode image file."));
     };
     img.src = url;
   });
@@ -348,9 +404,9 @@ export async function submitIssue(user: BoloUser, issue: NewIssue): Promise<stri
 
   const fullIssueData: Issue = {
     id: issueId,
-    title: issue.title.trim(),
-    description: issue.description.trim(),
-    reporter: issue.reporter.trim() || user.displayName,
+    title: sanitizeInput(issue.title, 150),
+    description: sanitizeInput(issue.description, 4000),
+    reporter: sanitizeInput(issue.reporter, 100) || user.displayName,
     reporterUid: user.uid,
     userId: user.uid,
     reporterEmail: user.email ?? null,
@@ -358,9 +414,9 @@ export async function submitIssue(user: BoloUser, issue: NewIssue): Promise<stri
     createdAt: Date.now(),
     date: dateStr,
     status: "reported",
-    category: "Civic Issue",
-    location: issue.location.trim(),
-    address: issue.address.trim(),
+    category: sanitizeInput(issue.language, 50) || "Civic Issue",
+    location: sanitizeInput(issue.location, 200),
+    address: sanitizeInput(issue.address, 300),
     images: imageUrls,
     state: resolved.state,
     district: resolved.district,
@@ -388,6 +444,19 @@ export async function updateIssue(
     throw new Error("Issue not found in database.");
   }
   const existing = snap.val() as Issue;
+
+  // Authorization & Resource Ownership Check (Prevent IDOR / Horizontal Privilege Escalation)
+  const currentUid = auth.currentUser?.uid;
+  if (currentUid && existing.reporterUid && existing.reporterUid !== currentUid && existing.userId !== currentUid) {
+    logSecurityEvent({
+      eventType: "AUTHORIZATION_FAILURE",
+      action: "UPDATE_ISSUE_ATTEMPT",
+      uid: currentUid,
+      targetId: issueId,
+      details: { reporterUid: existing.reporterUid },
+    });
+    throw new Error("Unauthorized: You do not have permission to modify this issue.");
+  }
 
   let finalImages = updates.images ?? existing.images;
   if (updates.newImages && updates.newImages.length > 0) {
@@ -426,8 +495,13 @@ export async function updateIssue(
     resolvedCity = resolved.city;
   }
 
-  const payload: Partial<Issue> = {
-    ...updates,
+  // Strict Schema Whitelisting & Input Sanitization (Mitigate Mass Assignment - OWASP API3:2023)
+  const safePayload: Partial<Issue> = {
+    title: updates.title !== undefined ? sanitizeInput(updates.title, 150) : existing.title,
+    description: updates.description !== undefined ? sanitizeInput(updates.description, 4000) : existing.description,
+    location: updates.location !== undefined ? sanitizeInput(updates.location, 200) : existing.location,
+    address: updates.address !== undefined ? sanitizeInput(updates.address, 300) : existing.address,
+    category: updates.category !== undefined ? sanitizeInput(updates.category, 50) : existing.category,
     images: finalImages,
     lat: resolvedLat,
     lng: resolvedLng,
@@ -435,13 +509,26 @@ export async function updateIssue(
     district: resolvedDistrict,
     city: resolvedCity,
   };
-  delete (payload as { newImages?: unknown }).newImages;
 
-  await update(issueRef, payload);
+  await update(issueRef, safePayload);
 }
 
 export async function deleteIssue(issueId: string): Promise<void> {
   const issueRef = ref(db, `issues/${issueId}`);
+  const snap = await get(issueRef);
+  if (snap.exists()) {
+    const existing = snap.val() as Issue;
+    const currentUid = auth.currentUser?.uid;
+    if (currentUid && existing.reporterUid && existing.reporterUid !== currentUid && existing.userId !== currentUid) {
+      logSecurityEvent({
+        eventType: "AUTHORIZATION_FAILURE",
+        action: "DELETE_ISSUE_ATTEMPT",
+        uid: currentUid,
+        targetId: issueId,
+      });
+      throw new Error("Unauthorized: You do not have permission to delete this issue.");
+    }
+  }
   await remove(issueRef);
 }
 
@@ -473,6 +560,16 @@ export async function updateUserProfile(
   uid: string,
   fields: { displayName?: string | undefined; legalName?: string | undefined; phone?: string | undefined },
 ): Promise<void> {
+  const currentUid = auth.currentUser?.uid;
+  if (currentUid && currentUid !== uid) {
+    logSecurityEvent({
+      eventType: "AUTHORIZATION_FAILURE",
+      action: "MODIFY_USER_PROFILE_ATTEMPT",
+      uid: currentUid,
+      targetId: uid,
+    });
+    throw new Error("Unauthorized: You can only modify your own profile.");
+  }
   const snap = await get(ref(db, `users/${uid}`));
   const existing = snap.exists() ? (snap.val() as UserProfile) : {};
   await set(ref(db, `users/${uid}`), { ...existing, ...fields, uid });
@@ -506,6 +603,52 @@ export async function getUserIssueCount(
   } catch {
     return 0;
   }
+}
+
+/**
+ * Privacy & Compliance: Data Export (GDPR / DPDP Article 20)
+ * Exports the complete user profile and reported issues.
+ */
+export async function exportUserData(uid: string): Promise<{ profile: UserProfile | null; issues: Issue[] }> {
+  const profile = await getUserProfile(uid);
+  let userIssues: Issue[] = [];
+  try {
+    const snap = await get(ref(db, "issues"));
+    if (snap.exists()) {
+      const allIssues = Object.values(snap.val() as Record<string, Issue>);
+      userIssues = allIssues.filter((i) => i.reporterUid === uid || i.userId === uid);
+    }
+  } catch {
+    // Continue with empty issues list
+  }
+  return { profile, issues: userIssues };
+}
+
+/**
+ * Privacy & Compliance: Right to Erasure / Account Deletion (GDPR / DPDP Article 17)
+ * Permanently purges user profile data and terminates authentication account.
+ */
+export async function deleteUserAccount(uid: string): Promise<void> {
+  const current = auth.currentUser;
+  if (!current || current.uid !== uid) {
+    throw new Error("Unauthorized: You can only delete your own account.");
+  }
+
+  logSecurityEvent({
+    eventType: "PERMISSION_CHANGE",
+    action: "DELETE_USER_ACCOUNT",
+    uid,
+  });
+
+  // 1. Delete user profile record from Realtime Database
+  try {
+    await remove(ref(db, `users/${uid}`));
+  } catch (err) {
+    console.warn("Could not delete user database record:", err);
+  }
+
+  // 2. Delete the user authentication record from Firebase Auth
+  await deleteUser(current);
 }
 
 

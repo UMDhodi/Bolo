@@ -3,6 +3,7 @@
     ".read": false,
     ".write": false,
     "users": {
+      ".indexOn": ["email"],
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"
@@ -11,7 +12,13 @@
     "issues": {
       ".read": true,
       "$issueId": {
-        ".write": "auth != null && !data.exists() && newData.child('reporterId').val() === auth.uid"
+        ".write": "auth != null && (!data.exists() || data.child('reporterUid').val() === auth.uid || data.child('userId').val() === auth.uid)"
+      }
+    },
+    "waitlist": {
+      ".read": false,
+      "$entry": {
+        ".write": "!data.exists() && newData.hasChildren(['email', 'createdAt'])"
       }
     }
   }

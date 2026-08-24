@@ -4,6 +4,7 @@ import {
   CircleAlert,
   Copy,
   Check,
+  Download,
   Edit2,
   HelpCircle,
   LifeBuoy,
@@ -11,6 +12,7 @@ import {
   Save,
   ScrollText,
   Settings,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -36,6 +38,8 @@ import {
   getUserProfile,
   getUserIssueCount,
   updateUserProfile,
+  exportUserData,
+  deleteUserAccount,
   getFirebaseErrorMessage,
   signOutOfBolo,
   type UserProfile,
@@ -191,6 +195,47 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
       toast.error(getFirebaseErrorMessage(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  const [exporting, setExporting] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  async function handleExportData() {
+    if (!user) return;
+    setExporting(true);
+    try {
+      const data = await exportUserData(user.uid);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bolo_citizen_data_${user.uid.slice(0, 8)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Personal data archive exported successfully!");
+    } catch (err) {
+      toast.error(getFirebaseErrorMessage(err));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!user) return;
+    setDeletingAccount(true);
+    try {
+      await deleteUserAccount(user.uid);
+      toast.success("Your account and profile have been permanently deleted.");
+      setDeleteConfirmOpen(false);
+      setProfileDialogOpen(false);
+    } catch (err) {
+      toast.error(getFirebaseErrorMessage(err));
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -396,6 +441,69 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
                 <InfoRow label="User ID" value={user.uid} />
               </div>
             )}
+
+            {/* Privacy & Compliance Actions (GDPR / DPDP) */}
+            <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-border/70 bg-secondary/30 p-3.5">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="font-semibold uppercase tracking-wider text-[10px]">Data Privacy & Control</span>
+                <span className="text-[10px] text-muted-foreground">DPDP / GDPR Compliant</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportData}
+                  disabled={exporting}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-xs font-semibold transition-colors hover:bg-secondary disabled:opacity-60"
+                >
+                  <Download className="size-3.5 text-primary" />
+                  {exporting ? "Exporting…" : "Export My Data (JSON)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete Account
+                </button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Account Deletion Confirmation Dialog ── */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display text-lg font-bold text-destructive">
+              <CircleAlert className="size-5" /> Permanently Delete Account?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-muted-foreground pt-1">
+            <p>
+              This action will permanently delete your citizen profile, phone records, and authentication account from Bolo Civic Connect.
+            </p>
+            <p className="text-xs text-destructive/90 font-medium">
+              This action is permanent and cannot be undone (Article 17 Right to Erasure).
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="inline-flex h-10 flex-1 items-center justify-center rounded-xl border border-border text-sm font-semibold transition-colors hover:bg-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60"
+              >
+                {deletingAccount ? "Deleting…" : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

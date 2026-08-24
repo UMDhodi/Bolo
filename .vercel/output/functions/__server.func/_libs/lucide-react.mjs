@@ -401,6 +401,26 @@ var CloudUpload = createLucideIcon("cloud-upload", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Download = createLucideIcon("download", [
+	["path", {
+		d: "M12 15V3",
+		key: "m9g1x1"
+	}],
+	["path", {
+		d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4",
+		key: "ih7n3h"
+	}],
+	["path", {
+		d: "m7 10 5 5 5-5",
+		key: "brsn70"
+	}]
+]);
+/**
+* @license lucide-react v0.575.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Globe = createLucideIcon("globe", [
 	["circle", {
 		cx: "12",
@@ -899,4 +919,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { ChevronDown as A, Clock as C, CircleAlert as D, CircleCheck as E, BadgeCheck as F, ArrowUpRight as I, ArrowLeft as L, Camera as M, CalendarDays as N, ChevronUp as O, Building2 as P, CloudUpload as S, CircleQuestionMark as T, LocateFixed as _, Trash2 as a, ImagePlus as b, SlidersHorizontal as c, Save as d, RefreshCw as f, Mail as g, MapPin as h, UserRound as i, Check as j, ChevronRight as k, Search as l, PenLine as m, Users as n, SwitchCamera as o, Pen as p, User as r, Sparkles as s, X as t, ScrollText as u, LifeBuoy as v, Circle as w, Globe as x, Languages as y };
+export { ChevronRight as A, CloudUpload as C, CircleCheck as D, CircleQuestionMark as E, Building2 as F, BadgeCheck as I, ArrowUpRight as L, Check as M, Camera as N, CircleAlert as O, CalendarDays as P, ArrowLeft as R, Download as S, Circle as T, LocateFixed as _, Trash2 as a, ImagePlus as b, SlidersHorizontal as c, Save as d, RefreshCw as f, Mail as g, MapPin as h, UserRound as i, ChevronDown as j, ChevronUp as k, Search as l, PenLine as m, Users as n, SwitchCamera as o, Pen as p, User as r, Sparkles as s, X as t, ScrollText as u, LifeBuoy as v, Clock as w, Globe as x, Languages as y };

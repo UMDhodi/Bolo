@@ -15,17 +15,33 @@ function record(error: unknown) {
 const CAUSE_DEPTH_LIMIT = 5;
 const DESCRIPTION_LENGTH_LIMIT = 8_000;
 
+const SECRET_PATTERNS = [
+  /Bearer\s+[A-Za-z0-9\-_.]+/gi,
+  /password["':\s]+[^\s,"']+/gi,
+  /apiKey["':\s]+[^\s,"']+/gi,
+  /secret["':\s]+[^\s,"']+/gi,
+];
+
+function redactSecrets(text: string): string {
+  let result = text;
+  for (const pattern of SECRET_PATTERNS) {
+    result = result.replace(pattern, "[REDACTED]");
+  }
+  return result;
+}
+
 export function describeError(error: unknown): string {
   const parts: string[] = [];
   let current: unknown = error;
   for (let depth = 0; depth < CAUSE_DEPTH_LIMIT && current != null; depth++) {
     if (!(current instanceof Error)) {
-      parts.push(typeof current === "string" ? current : safeStringify(current));
+      parts.push(typeof current === "string" ? redactSecrets(current) : safeStringify(current));
       break;
     }
     const label = depth === 0 ? "" : "caused by: ";
     const status = describeStatus(current);
-    parts.push(`${label}${current.stack ?? `${current.name}: ${current.message}`}${status}`);
+    const rawMsg = `${label}${current.stack ?? `${current.name}: ${current.message}`}${status}`;
+    parts.push(redactSecrets(rawMsg));
     current = current.cause;
   }
   return parts.join("\n").slice(0, DESCRIPTION_LENGTH_LIMIT);
@@ -39,9 +55,9 @@ function describeStatus(error: Error): string {
 
 function safeStringify(value: unknown): string {
   try {
-    return JSON.stringify(value) ?? String(value);
+    return redactSecrets(JSON.stringify(value) ?? String(value));
   } catch {
-    return String(value);
+    return redactSecrets(String(value));
   }
 }
 

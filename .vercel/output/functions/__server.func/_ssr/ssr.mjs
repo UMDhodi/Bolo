@@ -9,17 +9,29 @@ function record(error) {
 }
 var CAUSE_DEPTH_LIMIT = 5;
 var DESCRIPTION_LENGTH_LIMIT = 8e3;
+var SECRET_PATTERNS = [
+	/Bearer\s+[A-Za-z0-9\-_.]+/gi,
+	/password["':\s]+[^\s,"']+/gi,
+	/apiKey["':\s]+[^\s,"']+/gi,
+	/secret["':\s]+[^\s,"']+/gi
+];
+function redactSecrets(text) {
+	let result = text;
+	for (const pattern of SECRET_PATTERNS) result = result.replace(pattern, "[REDACTED]");
+	return result;
+}
 function describeError(error) {
 	const parts = [];
 	let current = error;
 	for (let depth = 0; depth < CAUSE_DEPTH_LIMIT && current != null; depth++) {
 		if (!(current instanceof Error)) {
-			parts.push(typeof current === "string" ? current : safeStringify(current));
+			parts.push(typeof current === "string" ? redactSecrets(current) : safeStringify(current));
 			break;
 		}
 		const label = depth === 0 ? "" : "caused by: ";
 		const status = describeStatus(current);
-		parts.push(`${label}${current.stack ?? `${current.name}: ${current.message}`}${status}`);
+		const rawMsg = `${label}${current.stack ?? `${current.name}: ${current.message}`}${status}`;
+		parts.push(redactSecrets(rawMsg));
 		current = current.cause;
 	}
 	return parts.join("\n").slice(0, DESCRIPTION_LENGTH_LIMIT);
@@ -31,9 +43,9 @@ function describeStatus(error) {
 }
 function safeStringify(value) {
 	try {
-		return JSON.stringify(value) ?? String(value);
+		return redactSecrets(JSON.stringify(value) ?? String(value));
 	} catch {
-		return String(value);
+		return redactSecrets(String(value));
 	}
 }
 function isErrorLike(value) {
@@ -93,7 +105,7 @@ function renderErrorPage() {
 }
 var serverEntryPromise;
 async function getServerEntry() {
-	if (!serverEntryPromise) serverEntryPromise = import("./server-DleXMdLR.mjs").then((n) => n.t).then((m) => m.default ?? m);
+	if (!serverEntryPromise) serverEntryPromise = import("./server-C11NYt3R.mjs").then((n) => n.t).then((m) => m.default ?? m);
 	return serverEntryPromise;
 }
 async function normalizeCatastrophicSsrResponse(response) {
@@ -115,15 +127,79 @@ function isH3SwallowedErrorBody(body) {
 		return false;
 	}
 }
+function applySecurityHeaders(response, request) {
+	const headers = new Headers(response.headers);
+	headers.set("X-Content-Type-Options", "nosniff");
+	headers.set("X-Frame-Options", "SAMEORIGIN");
+	headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+	headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+	headers.set("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()");
+	headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cartocdn.com https://*.tile.openstreetmap.org; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://lh3.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://*.google.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self';");
+	headers.delete("x-powered-by");
+	headers.delete("server");
+	headers.delete("X-Powered-By");
+	headers.delete("Server");
+	const origin = request.headers.get("origin");
+	if (origin && origin !== "null") try {
+		const reqHost = new URL(request.url).host;
+		const originHost = new URL(origin).host;
+		if (originHost === reqHost || originHost.endsWith(`.${reqHost}`)) {
+			headers.set("Access-Control-Allow-Origin", origin);
+			headers.set("Access-Control-Allow-Credentials", "true");
+			headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+			headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+		}
+	} catch {}
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers
+	});
+}
 var server_default = { async fetch(request, env, ctx) {
+	const proto = request.headers.get("x-forwarded-proto");
+	const url = new URL(request.url);
+	if (proto === "http" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+		url.protocol = "https:";
+		return new Response(null, {
+			status: 301,
+			headers: {
+				Location: url.toString(),
+				"Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+			}
+		});
+	}
+	if (request.method === "OPTIONS") {
+		const origin = request.headers.get("origin");
+		const headers = new Headers();
+		headers.set("X-Content-Type-Options", "nosniff");
+		headers.set("X-Frame-Options", "SAMEORIGIN");
+		headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+		headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+		headers.set("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()");
+		if (origin && origin !== "null") try {
+			const reqHost = new URL(request.url).host;
+			const originHost = new URL(origin).host;
+			if (originHost === reqHost || originHost.endsWith(`.${reqHost}`)) {
+				headers.set("Access-Control-Allow-Origin", origin);
+				headers.set("Access-Control-Allow-Credentials", "true");
+				headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+				headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+			}
+		} catch {}
+		return new Response(null, {
+			status: 204,
+			headers
+		});
+	}
 	try {
-		return await normalizeCatastrophicSsrResponse(await (await getServerEntry()).fetch(request, env, ctx));
+		return applySecurityHeaders(await normalizeCatastrophicSsrResponse(await (await getServerEntry()).fetch(request, env, ctx)), request);
 	} catch (error) {
 		console.error(error);
-		return new Response(renderErrorPage(), {
+		return applySecurityHeaders(new Response(renderErrorPage(), {
 			status: 500,
 			headers: { "content-type": "text/html; charset=utf-8" }
-		});
+		}), request);
 	}
 } };
 //#endregion

@@ -4147,6 +4147,21 @@ function signOut(auth) {
 	return getModularInstance(auth).signOut();
 }
 /**
+* Deletes and signs out the user.
+*
+* @remarks
+* Important: this is a security-sensitive operation that requires the user to have recently
+* signed in. If this requirement isn't met, ask the user to authenticate again and then call
+* {@link reauthenticateWithCredential}.
+*
+* @param user - The user.
+*
+* @public
+*/
+async function deleteUser(user) {
+	return getModularInstance(user).delete();
+}
+/**
 * @license
 * Copyright 2020 Google LLC
 *
@@ -4519,4 +4534,4 @@ function _isEmptyString(input) {
 	return typeof input === "undefined" || input?.length === 0;
 }
 //#endregion
-export { signInWithEmailAndPassword as a, updateProfile as c, onAuthStateChanged as i, createUserWithEmailAndPassword as n, signInWithPopup as o, getAuth as r, signOut as s, GoogleAuthProvider as t };
+export { onAuthStateChanged as a, signOut as c, getAuth as i, updateProfile as l, createUserWithEmailAndPassword as n, signInWithEmailAndPassword as o, deleteUser as r, signInWithPopup as s, GoogleAuthProvider as t };

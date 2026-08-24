@@ -6,7 +6,7 @@ import { a as getApp, o as getApps } from "../_libs/@firebase/app+[...].mjs";
 import "../_libs/firebase.mjs";
 import { c as push, f as set, r as getDatabase, u as ref } from "../_libs/@firebase/database+[...].mjs";
 import { n as toast } from "../_libs/sonner.mjs";
-import { C as Clock, E as CircleCheck, L as ArrowLeft, g as Mail, n as Users, r as User, s as Sparkles } from "../_libs/lucide-react.mjs";
+import { D as CircleCheck, R as ArrowLeft, g as Mail, n as Users, r as User, s as Sparkles, w as Clock } from "../_libs/lucide-react.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/waitlist-BA1mabX8.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();

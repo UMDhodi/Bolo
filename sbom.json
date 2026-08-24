@@ -1,0 +1,35 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:10c703c5-03c1-4569-a67e-467f183c2183",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-08-24T20:24:00Z",
+    "component": {
+      "name": "bolo-civic-connect",
+      "version": "1.0.0",
+      "type": "application",
+      "description": "Bolo Civic Connect - Neighborhood Civic Grievance Management Platform"
+    }
+  },
+  "components": [
+    { "name": "react", "version": "19.2.0", "purl": "pkg:npm/react@19.2.0" },
+    { "name": "react-dom", "version": "19.2.0", "purl": "pkg:npm/react-dom@19.2.0" },
+    { "name": "@tanstack/react-router", "version": "1.170.18", "purl": "pkg:npm/%40tanstack/react-router@1.170.18" },
+    { "name": "@tanstack/react-start", "version": "1.168.32", "purl": "pkg:npm/%40tanstack/react-start@1.168.32" },
+    { "name": "@tanstack/react-query", "version": "5.101.1", "purl": "pkg:npm/%40tanstack/react-query@5.101.1" },
+    { "name": "firebase", "version": "12.18.0", "purl": "pkg:npm/firebase@12.18.0" },
+    { "name": "tailwindcss", "version": "4.2.1", "purl": "pkg:npm/tailwindcss@4.2.1" },
+    { "name": "leaflet", "version": "1.9.4", "purl": "pkg:npm/leaflet@1.9.4" },
+    { "name": "react-leaflet", "version": "5.0.0", "purl": "pkg:npm/react-leaflet@5.0.0" },
+    { "name": "zod", "version": "3.24.2", "purl": "pkg:npm/zod@3.24.2" },
+    { "name": "sonner", "version": "2.0.7", "purl": "pkg:npm/sonner@2.0.7" },
+    { "name": "lucide-react", "version": "0.575.0", "purl": "pkg:npm/lucide-react@0.575.0" },
+    { "name": "clsx", "version": "2.1.1", "purl": "pkg:npm/clsx@2.1.1" },
+    { "name": "tailwind-merge", "version": "3.5.0", "purl": "pkg:npm/tailwind-merge@3.5.0" },
+    { "name": "nitro", "version": "3.0.260603-beta", "purl": "pkg:npm/nitro@3.0.260603-beta" },
+    { "name": "vite", "version": "8.2.0", "purl": "pkg:npm/vite@8.2.0" },
+    { "name": "typescript", "version": "5.8.3", "purl": "pkg:npm/typescript@5.8.3" }
+  ]
+}

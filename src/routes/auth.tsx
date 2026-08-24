@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, MapPin, Megaphone, Phone, Sparkles, KeyRound } from "lucide-react";
+import { ArrowLeft, MapPin, Megaphone, Phone, Sparkles, KeyRound, Check, XCircle } from "lucide-react";
 import type { ConfirmationResult, RecaptchaVerifier } from "firebase/auth";
 
 import civicIllustration from "@/assets/bolo-auth-civic-india.png";
@@ -15,6 +15,7 @@ import {
   sendPhoneOTP,
   verifyPhoneOTP,
 } from "@/lib/firebase";
+import { validateStrongPassword } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
@@ -136,7 +137,10 @@ function AuthPage() {
 
     if (mode === "signup") {
       if (name.trim().length < 2) return setError("Enter your name.");
-      if (password.length < 6) return setError("Choose a password with at least 6 characters.");
+      const pwdValidation = validateStrongPassword(password);
+      if (!pwdValidation.valid) {
+        return setError(`Strong password required: ${pwdValidation.errors.join(", ")}.`);
+      }
       if (password !== confirmPassword) return setError("Passwords do not match.");
     }
 
@@ -159,6 +163,8 @@ function AuthPage() {
       setPending(false);
     }
   }
+
+  const pwdValidation = validateStrongPassword(password);
 
   return (
     <main className="grid h-dvh max-h-dvh overflow-hidden bg-background lg:grid-cols-[minmax(0,1.05fr)_minmax(440px,.95fr)]">
@@ -243,8 +249,39 @@ function AuthPage() {
                 <Field label="Your name" type="text" autoComplete="name" value={name} onChange={setName} placeholder="e.g. Aditi Sharma" required />
               )}
               <Field label="Email address" type="email" autoComplete="email" value={email} onChange={setEmail} placeholder="you@example.com" required />
-              <Field label="Password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={setPassword} placeholder="At least 6 characters" required />
-              {mode === "signup" && <Field label="Confirm password" type="password" autoComplete="new-password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Repeat your password" required />}
+              
+              <div>
+                <Field
+                  label="Password"
+                  type="password"
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={setPassword}
+                  placeholder={mode === "signup" ? "8+ characters (Aa, 1, #)" : "Your password"}
+                  required
+                />
+                {mode === "signup" && (
+                  <div className="mt-1.5 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                    <RequirementItem met={pwdValidation.hasMinLength} label="8+ characters" />
+                    <RequirementItem met={pwdValidation.hasUpper} label="Uppercase (A-Z)" />
+                    <RequirementItem met={pwdValidation.hasLower} label="Lowercase (a-z)" />
+                    <RequirementItem met={pwdValidation.hasNumber} label="Number (0-9)" />
+                    <RequirementItem met={pwdValidation.hasSpecial} label="Special symbol" />
+                  </div>
+                )}
+              </div>
+
+              {mode === "signup" && (
+                <Field
+                  label="Confirm password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  placeholder="Repeat your password"
+                  required
+                />
+              )}
 
               <div id="recaptcha-container" />
 
@@ -272,6 +309,23 @@ function AuthPage() {
 function Field({ label, value, onChange, ...props }: { label: string; value: string; onChange: (value: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange">) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return <div><label htmlFor={id} className="mb-1 block text-xs font-bold text-foreground">{label}</label><input id={id} value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-full rounded-2xl border border-input bg-card px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" {...props} /></div>;
+}
+
+function RequirementItem({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div
+      className={`flex items-center gap-1 text-[10px] transition-colors ${
+        met ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80"
+      }`}
+    >
+      {met ? (
+        <Check className="size-3 shrink-0 stroke-[3]" />
+      ) : (
+        <span className="inline-block size-1.5 rounded-full bg-muted-foreground/40 ml-1 mr-0.5" />
+      )}
+      <span>{label}</span>
+    </div>
+  );
 }
 
 

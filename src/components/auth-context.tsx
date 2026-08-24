@@ -16,10 +16,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = observeBoloAuth((nextUser) => {
+      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+      const secureFlag = isHttps ? "; Secure" : "";
       if (nextUser) {
-        document.cookie = "bolo_session=1; Path=/; Max-Age=2592000; SameSite=Lax";
+        document.cookie = `bolo_session=1; Path=/; Max-Age=2592000; SameSite=Lax${secureFlag}`;
       } else {
-        document.cookie = "bolo_session=; Path=/; Max-Age=0; SameSite=Lax";
+        document.cookie = `bolo_session=; Path=/; Max-Age=0; SameSite=Lax${secureFlag}`;
       }
       setUser(nextUser);
       setLoading(false);
