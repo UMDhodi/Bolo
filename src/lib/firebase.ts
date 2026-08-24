@@ -126,9 +126,46 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
 export function subscribeToIssues(callback: (issues: Issue[]) => void): () => void {
   const issuesRef = ref(db, "issues");
+  let hasReceivedData = false;
+
+  // Direct fast HTTP read from Firebase
+  get(issuesRef)
+    .then((snapshot) => {
+      if (snapshot.exists()) {
+        hasReceivedData = true;
+        const val = snapshot.val();
+        const list: Issue[] = Object.values(val);
+        list.sort((a, b) => (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()));
+        callback(list.length > 0 ? list : SEED_ISSUES);
+      } else {
+        if (!hasReceivedData) {
+          hasReceivedData = true;
+          callback(SEED_ISSUES);
+        }
+      }
+    })
+    .catch((err) => {
+      console.warn("Direct issues get() notice:", err);
+      if (!hasReceivedData) {
+        hasReceivedData = true;
+        callback(SEED_ISSUES);
+      }
+    });
+
+  // Safety timeout guard (ensures UI loader resolves in at most 1.5s)
+  const timeoutId = setTimeout(() => {
+    if (!hasReceivedData) {
+      hasReceivedData = true;
+      callback(SEED_ISSUES);
+    }
+  }, 1500);
+
+  // Realtime stream listener for live updates
   const unsubscribe = onValue(
     issuesRef,
     (snapshot) => {
+      clearTimeout(timeoutId);
+      hasReceivedData = true;
       if (snapshot.exists()) {
         const val = snapshot.val();
         const list: Issue[] = Object.values(val);
@@ -139,12 +176,19 @@ export function subscribeToIssues(callback: (issues: Issue[]) => void): () => vo
       }
     },
     (error) => {
-      console.warn("Firebase Realtime Database read notice:", error);
-      callback(SEED_ISSUES);
+      clearTimeout(timeoutId);
+      console.warn("Firebase Realtime Database stream notice:", error);
+      if (!hasReceivedData) {
+        hasReceivedData = true;
+        callback(SEED_ISSUES);
+      }
     }
   );
 
-  return unsubscribe;
+  return () => {
+    clearTimeout(timeoutId);
+    unsubscribe();
+  };
 }
 
 function message(error: unknown) {
