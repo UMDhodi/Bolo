@@ -125,8 +125,6 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 }
 
 export function subscribeToIssues(callback: (issues: Issue[]) => void): () => void {
-  callback([]);
-
   const issuesRef = ref(db, "issues");
   const unsubscribe = onValue(
     issuesRef,
@@ -134,15 +132,15 @@ export function subscribeToIssues(callback: (issues: Issue[]) => void): () => vo
       if (snapshot.exists()) {
         const val = snapshot.val();
         const list: Issue[] = Object.values(val);
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        callback(list);
+        list.sort((a, b) => (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()));
+        callback(list.length > 0 ? list : SEED_ISSUES);
       } else {
-        callback([]);
+        callback(SEED_ISSUES);
       }
     },
     (error) => {
       console.warn("Firebase Realtime Database read notice:", error);
-      callback([]);
+      callback(SEED_ISSUES);
     }
   );
 
