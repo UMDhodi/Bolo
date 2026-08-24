@@ -2,10 +2,10 @@ import { i as __toESM } from "../_runtime.mjs";
 import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
 import { p as useNavigate } from "../_libs/@tanstack/react-router+[...].mjs";
 import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { i as createBoloAccount, l as signInToBolo, o as getFirebaseErrorMessage, r as useAuth, u as signInWithGoogle } from "./router-Bqs_Dxed.mjs";
+import { i as createBoloAccount, l as signInToBolo, o as getFirebaseErrorMessage, r as useAuth, u as signInWithGoogle } from "./router-BCpHqYz2.mjs";
 import { t as SpinnerToCheck } from "./loader-64uLEdom.mjs";
-import { m as MapPin, o as Sparkles } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/auth-DA_9uY3t.js
+import { h as MapPin, s as Sparkles } from "../_libs/lucide-react.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/auth-CHpmMH24.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var bolo_auth_civic_india_default = "/assets/bolo-auth-civic-india-EEDA0VFx.png";
@@ -30,6 +30,11 @@ function AuthPage() {
 			await signInWithGoogle();
 			await navigate({ to: "/" });
 		} catch (err) {
+			const errStr = (err instanceof Error ? err.message : String(err)).toLowerCase();
+			if (errStr.includes("quota-exceeded") || errStr.includes("quota") || errStr.includes("limit")) {
+				navigate({ to: "/waitlist" });
+				return;
+			}
 			setError(getFirebaseErrorMessage(err));
 		} finally {
 			setPending(false);
@@ -58,6 +63,11 @@ function AuthPage() {
 			else await signInToBolo(email, password);
 			await navigate({ to: "/" });
 		} catch (nextError) {
+			const errStr = (nextError instanceof Error ? nextError.message : String(nextError)).toLowerCase();
+			if (errStr.includes("quota-exceeded") || errStr.includes("quota")) {
+				navigate({ to: "/waitlist" });
+				return;
+			}
 			setError(getFirebaseErrorMessage(nextError));
 		} finally {
 			setPending(false);

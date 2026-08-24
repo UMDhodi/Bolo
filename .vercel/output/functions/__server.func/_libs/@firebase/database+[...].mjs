@@ -7590,6 +7590,39 @@ function queryParamsGetNodeFilter(queryParams) {
 	else if (queryParams.hasLimit()) return new LimitedFilter(queryParams);
 	else return new RangedFilter(queryParams);
 }
+function queryParamsStartAt(queryParams, indexValue, key) {
+	const newParams = queryParams.copy();
+	newParams.startSet_ = true;
+	if (indexValue === void 0) indexValue = null;
+	newParams.indexStartValue_ = indexValue;
+	if (key != null) {
+		newParams.startNameSet_ = true;
+		newParams.indexStartName_ = key;
+	} else {
+		newParams.startNameSet_ = false;
+		newParams.indexStartName_ = "";
+	}
+	return newParams;
+}
+function queryParamsEndAt(queryParams, indexValue, key) {
+	const newParams = queryParams.copy();
+	newParams.endSet_ = true;
+	if (indexValue === void 0) indexValue = null;
+	newParams.indexEndValue_ = indexValue;
+	if (key !== void 0) {
+		newParams.endNameSet_ = true;
+		newParams.indexEndName_ = key;
+	} else {
+		newParams.endNameSet_ = false;
+		newParams.indexEndName_ = "";
+	}
+	return newParams;
+}
+function queryParamsOrderBy(queryParams, index) {
+	const newParams = queryParams.copy();
+	newParams.index_ = index;
+	return newParams;
+}
 /**
 * Returns a set of REST query string parameters representing this query.
 *
@@ -10572,6 +10605,10 @@ var validateFirebaseMergeDataArg = function(fnName, data, path, optional) {
 	});
 	validateFirebaseMergePaths(errorPrefix$1, mergePaths);
 };
+var validateKey = function(fnName, argumentName, key, optional) {
+	if (key === void 0) return;
+	if (!isValidKey(key)) throw new Error(errorPrefix(fnName, argumentName) + "was an invalid key = \"" + key + "\".  Firebase keys must be non-empty strings and can't contain \".\", \"#\", \"$\", \"/\", \"[\", or \"]\").");
+};
 /**
 * @internal
 */
@@ -11009,6 +11046,9 @@ function repoRemoveEventCallbackForQuery(repo, query, eventRegistration) {
 }
 function repoInterrupt(repo) {
 	if (repo.persistentConnection_) repo.persistentConnection_.interrupt(INTERRUPT_REASON);
+}
+function repoResume(repo) {
+	if (repo.persistentConnection_) repo.persistentConnection_.resume(INTERRUPT_REASON);
 }
 function repoLog(repo, ...varArgs) {
 	let prefix = "";
@@ -11637,6 +11677,44 @@ var QueryImpl = class QueryImpl {
 	}
 };
 /**
+* Validates that no other order by call has been made
+*/
+function validateNoPreviousOrderByCall(query, fnName) {
+	if (query._orderByCalled === true) throw new Error(fnName + ": You can't combine multiple orderBy calls.");
+}
+/**
+* Validates start/end values for queries.
+*/
+function validateQueryEndpoints(params) {
+	let startNode = null;
+	let endNode = null;
+	if (params.hasStart()) startNode = params.getIndexStartValue();
+	if (params.hasEnd()) endNode = params.getIndexEndValue();
+	if (params.getIndex() === KEY_INDEX) {
+		const tooManyArgsError = "Query: When ordering by key, you may only pass one argument to startAt(), endAt(), or equalTo().";
+		const wrongArgTypeError = "Query: When ordering by key, the argument passed to startAt(), startAfter(), endAt(), endBefore(), or equalTo() must be a string.";
+		if (params.hasStart()) {
+			if (params.getIndexStartName() !== MIN_NAME) throw new Error(tooManyArgsError);
+			else if (typeof startNode !== "string") throw new Error(wrongArgTypeError);
+		}
+		if (params.hasEnd()) {
+			if (params.getIndexEndName() !== MAX_NAME) throw new Error(tooManyArgsError);
+			else if (typeof endNode !== "string") throw new Error(wrongArgTypeError);
+		}
+	} else if (params.getIndex() === PRIORITY_INDEX) {
+		if (startNode != null && !isValidPriority(startNode) || endNode != null && !isValidPriority(endNode)) throw new Error("Query: When ordering by priority, the first argument passed to startAt(), startAfter() endAt(), endBefore(), or equalTo() must be a valid priority value (null, a number, or a string).");
+	} else {
+		assert(params.getIndex() instanceof PathIndex || params.getIndex() === VALUE_INDEX, "unknown index type.");
+		if (startNode != null && typeof startNode === "object" || endNode != null && typeof endNode === "object") throw new Error("Query: First argument passed to startAt(), startAfter(), endAt(), endBefore(), or equalTo() cannot be an object.");
+	}
+}
+/**
+* Validates that limit* has been called with the correct combination of parameters
+*/
+function validateLimit(params) {
+	if (params.hasStart() && params.hasEnd() && params.hasLimit() && !params.hasAnchoredLimit()) throw new Error("Query: Can't combine startAt(), startAfter(), endAt(), endBefore(), and limit(). Use limitToFirst() or limitToLast() instead.");
+}
+/**
 * @internal
 */
 var ReferenceImpl = class ReferenceImpl extends QueryImpl {
@@ -12091,6 +12169,144 @@ function onValue(query, callback, cancelCallbackOrListenOptions, options) {
 	return addEventListener(query, "value", callback, cancelCallbackOrListenOptions, options);
 }
 /**
+* A `QueryConstraint` is used to narrow the set of documents returned by a
+* Database query. `QueryConstraint`s are created by invoking {@link endAt},
+* {@link endBefore}, {@link startAt}, {@link startAfter}, {@link
+* limitToFirst}, {@link limitToLast}, {@link orderByChild},
+* {@link orderByChild}, {@link orderByKey} , {@link orderByPriority} ,
+* {@link orderByValue}  or {@link equalTo} and
+* can then be passed to {@link query} to create a new query instance that
+* also contains this `QueryConstraint`.
+*/
+var QueryConstraint = class {};
+var QueryEndAtConstraint = class extends QueryConstraint {
+	constructor(_value, _key) {
+		super();
+		this._value = _value;
+		this._key = _key;
+		this.type = "endAt";
+	}
+	_apply(query) {
+		validateFirebaseDataArg("endAt", this._value, query._path, true);
+		const newParams = queryParamsEndAt(query._queryParams, this._value, this._key);
+		validateLimit(newParams);
+		validateQueryEndpoints(newParams);
+		if (query._queryParams.hasEnd()) throw new Error("endAt: Starting point was already set (by another call to endAt, endBefore or equalTo).");
+		return new QueryImpl(query._repo, query._path, newParams, query._orderByCalled);
+	}
+};
+var QueryStartAtConstraint = class extends QueryConstraint {
+	constructor(_value, _key) {
+		super();
+		this._value = _value;
+		this._key = _key;
+		this.type = "startAt";
+	}
+	_apply(query) {
+		validateFirebaseDataArg("startAt", this._value, query._path, true);
+		const newParams = queryParamsStartAt(query._queryParams, this._value, this._key);
+		validateLimit(newParams);
+		validateQueryEndpoints(newParams);
+		if (query._queryParams.hasStart()) throw new Error("startAt: Starting point was already set (by another call to startAt, startBefore or equalTo).");
+		return new QueryImpl(query._repo, query._path, newParams, query._orderByCalled);
+	}
+};
+var QueryOrderByChildConstraint = class extends QueryConstraint {
+	constructor(_path) {
+		super();
+		this._path = _path;
+		this.type = "orderByChild";
+	}
+	_apply(query) {
+		validateNoPreviousOrderByCall(query, "orderByChild");
+		const parsedPath = new Path(this._path);
+		if (pathIsEmpty(parsedPath)) throw new Error("orderByChild: cannot pass in empty path. Use orderByValue() instead.");
+		const index = new PathIndex(parsedPath);
+		const newParams = queryParamsOrderBy(query._queryParams, index);
+		validateQueryEndpoints(newParams);
+		return new QueryImpl(query._repo, query._path, newParams, true);
+	}
+};
+/**
+* Creates a new `QueryConstraint` that orders by the specified child key.
+*
+* Queries can only order by one key at a time. Calling `orderByChild()`
+* multiple times on the same query is an error.
+*
+* Firebase queries allow you to order your data by any child key on the fly.
+* However, if you know in advance what your indexes will be, you can define
+* them via the .indexOn rule in your Security Rules for better performance. See
+* the{@link https://firebase.google.com/docs/database/security/indexing-data}
+* rule for more information.
+*
+* You can read more about `orderByChild()` in
+* {@link https://firebase.google.com/docs/database/web/lists-of-data#sort_data | Sort data}.
+*
+* @param path - The path to order by.
+*/
+function orderByChild(path) {
+	if (path === "$key") throw new Error("orderByChild: \"$key\" is invalid.  Use orderByKey() instead.");
+	else if (path === "$priority") throw new Error("orderByChild: \"$priority\" is invalid.  Use orderByPriority() instead.");
+	else if (path === "$value") throw new Error("orderByChild: \"$value\" is invalid.  Use orderByValue() instead.");
+	validatePathString("orderByChild", "path", path, false);
+	return new QueryOrderByChildConstraint(path);
+}
+var QueryEqualToValueConstraint = class extends QueryConstraint {
+	constructor(_value, _key) {
+		super();
+		this._value = _value;
+		this._key = _key;
+		this.type = "equalTo";
+	}
+	_apply(query) {
+		validateFirebaseDataArg("equalTo", this._value, query._path, false);
+		if (query._queryParams.hasStart()) throw new Error("equalTo: Starting point was already set (by another call to startAt/startAfter or equalTo).");
+		if (query._queryParams.hasEnd()) throw new Error("equalTo: Ending point was already set (by another call to endAt/endBefore or equalTo).");
+		return new QueryEndAtConstraint(this._value, this._key)._apply(new QueryStartAtConstraint(this._value, this._key)._apply(query));
+	}
+};
+/**
+* Creates a `QueryConstraint` that includes children that match the specified
+* value.
+*
+* Using `startAt()`, `startAfter()`, `endBefore()`, `endAt()` and `equalTo()`
+* allows you to choose arbitrary starting and ending points for your queries.
+*
+* The optional key argument can be used to further limit the range of the
+* query. If it is specified, then children that have exactly the specified
+* value must also have exactly the specified key as their key name. This can be
+* used to filter result sets with many matches for the same value.
+*
+* You can read more about `equalTo()` in
+* {@link https://firebase.google.com/docs/database/web/lists-of-data#filtering_data | Filtering data}.
+*
+* @param value - The value to match for. The argument type depends on which
+* `orderBy*()` function was used in this query. Specify a value that matches
+* the `orderBy*()` type. When used in combination with `orderByKey()`, the
+* value must be a string.
+* @param key - The child key to start at, among the children with the
+* previously specified priority. This argument is only allowed if ordering by
+* child, value, or priority.
+*/
+function equalTo(value, key) {
+	validateKey("equalTo", "key", key);
+	return new QueryEqualToValueConstraint(value, key);
+}
+/**
+* Creates a new immutable instance of `Query` that is extended to also include
+* additional query constraints.
+*
+* @param query - The Query instance to use as a base for the new constraints.
+* @param queryConstraints - The list of `QueryConstraint`s to apply.
+* @throws if any of the provided query constraints cannot be combined with the
+* existing or new constraints.
+*/
+function query(query, ...queryConstraints) {
+	let queryImpl = getModularInstance(query);
+	for (const constraint of queryConstraints) queryImpl = constraint._apply(queryImpl);
+	return queryImpl;
+}
+/**
 * Define reference constructor in various modules
 *
 * We are doing this here to avoid several circular
@@ -12280,6 +12496,48 @@ function connectDatabaseEmulator(db, host, port, options = {}) {
 	repoManagerApplyEmulatorSettings(repo, hostAndPort, options, tokenProvider);
 }
 /**
+* Disconnects from the server (all Database operations will be completed
+* offline).
+*
+* The client automatically maintains a persistent connection to the Database
+* server, which will remain active indefinitely and reconnect when
+* disconnected. However, the `goOffline()` and `goOnline()` methods may be used
+* to control the client connection in cases where a persistent connection is
+* undesirable.
+*
+* While offline, the client will no longer receive data updates from the
+* Database. However, all Database operations performed locally will continue to
+* immediately fire events, allowing your application to continue behaving
+* normally. Additionally, each operation performed locally will automatically
+* be queued and retried upon reconnection to the Database server.
+*
+* To reconnect to the Database and begin receiving remote events, see
+* `goOnline()`.
+*
+* @param db - The instance to disconnect.
+*/
+function goOffline(db) {
+	db = getModularInstance(db);
+	db._checkNotDeleted("goOffline");
+	repoInterrupt(db._repo);
+}
+/**
+* Reconnects to the server and synchronizes the offline Database state
+* with the server state.
+*
+* This method should be used after disabling the active connection with
+* `goOffline()`. Once reconnected, the client will transmit the proper data
+* and fire the appropriate events so that your client "catches up"
+* automatically.
+*
+* @param db - The instance to reconnect.
+*/
+function goOnline(db) {
+	db = getModularInstance(db);
+	db._checkNotDeleted("goOnline");
+	repoResume(db._repo);
+}
+/**
 * @license
 * Copyright 2021 Google LLC
 *
@@ -12392,4 +12650,4 @@ PersistentConnection.prototype.echo = function(data, onEcho) {
 setWebSocketImpl(import_websocket.default.Client);
 registerDatabase("node");
 //#endregion
-export { ref as a, update as c, push as i, getDatabase as n, remove as o, onValue as r, set as s, get as t };
+export { goOnline as a, push as c, remove as d, set as f, goOffline as i, query as l, get as n, onValue as o, update as p, getDatabase as r, orderByChild as s, equalTo as t, ref as u };

@@ -2,11 +2,11 @@ import { i as __toESM } from "../_runtime.mjs";
 import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
 import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
 import { n as toast } from "../_libs/sonner.mjs";
-import { _ as initAutoLocationDetection, f as submitIssue, n as Route, o as getFirebaseErrorMessage, r as useAuth, v as useLanguage, y as useT } from "./router-Bqs_Dxed.mjs";
+import { _ as initAutoLocationDetection, f as submitIssue, n as Route$1, o as getFirebaseErrorMessage, r as useAuth, v as useLanguage, y as useT } from "./router-BCpHqYz2.mjs";
 import { t as SpinnerToCheck } from "./loader-64uLEdom.mjs";
-import { C as CircleAlert, D as Check, O as Camera, a as SwitchCamera, b as CloudUpload, d as RefreshCw, h as LocateFixed, i as Trash2, t as X, v as ImagePlus } from "../_libs/lucide-react.mjs";
-import { _ as cn, a as DialogTitle, f as Input, g as Textarea, h as SiteHeader, i as DialogHeader, m as LanguageSelector, n as DialogContent, p as Label, t as Dialog } from "./textarea-CBilAxl2.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/raise-CV6BSy8j.js
+import { D as CircleAlert, M as Camera, S as CloudUpload, _ as LocateFixed, a as Trash2, b as ImagePlus, f as RefreshCw, j as Check, o as SwitchCamera, t as X } from "../_libs/lucide-react.mjs";
+import { _ as cn, a as DialogTitle, f as Input, g as Textarea, h as SiteHeader, i as DialogHeader, m as LanguageSelector, n as DialogContent, p as Label, t as Dialog } from "./textarea-BKWF6XWk.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/raise-DUNA4MJH.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function CameraCaptureDialog({ open, onOpenChange, onCapture }) {
@@ -221,7 +221,7 @@ function validate(f, t) {
 function RaisePage() {
 	const { user } = useAuth();
 	const { language } = useLanguage();
-	const navigate = Route.useNavigate();
+	const navigate = Route$1.useNavigate();
 	const [fields, setFields] = (0, import_react.useState)(empty);
 	const [touched, setTouched] = (0, import_react.useState)({});
 	const [previews, setPreviews] = (0, import_react.useState)([]);

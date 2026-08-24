@@ -7,9 +7,9 @@ import { t as QueryClientProvider } from "../_libs/tanstack__react-query.mjs";
 import { a as getApp, o as getApps, s as initializeApp } from "../_libs/@firebase/app+[...].mjs";
 import "../_libs/firebase.mjs";
 import { a as signInWithEmailAndPassword, c as updateProfile, i as onAuthStateChanged, n as createUserWithEmailAndPassword, o as signInWithPopup, r as getAuth, s as signOut, t as GoogleAuthProvider } from "../_libs/firebase__auth.mjs";
-import { a as ref, c as update, i as push, n as getDatabase, o as remove, r as onValue, s as set, t as get } from "../_libs/@firebase/database+[...].mjs";
+import { a as goOnline, c as push, d as remove, f as set, i as goOffline, l as query, n as get, o as onValue, p as update, r as getDatabase, s as orderByChild, t as equalTo, u as ref } from "../_libs/@firebase/database+[...].mjs";
 import { t as Toaster } from "../_libs/sonner.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-Bqs_Dxed.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-BCpHqYz2.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -22,7 +22,7 @@ var __exportAll = (all, no_symbols) => {
 	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
 	return target;
 };
-var styles_default = "/assets/styles-DCsTTupi.css";
+var styles_default = "/assets/styles-BQScyu86.css";
 /**
 * Multi-language copy dictionary for Bolo Civic Connect.
 *
@@ -2223,6 +2223,31 @@ var firebaseConfig = {
 var app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 var auth = getAuth(app);
 var db = getDatabase(app);
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+	let idleTimer = null;
+	const IDLE_TIMEOUT_MS = 18e4;
+	const handleActive = () => {
+		try {
+			goOnline(db);
+		} catch {}
+		if (idleTimer) clearTimeout(idleTimer);
+		idleTimer = setTimeout(() => {
+			if (document.visibilityState === "hidden") try {
+				goOffline(db);
+			} catch {}
+		}, IDLE_TIMEOUT_MS);
+	};
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState === "hidden") try {
+			goOffline(db);
+		} catch {}
+		else handleActive();
+	});
+	window.addEventListener("focus", handleActive);
+	window.addEventListener("mousemove", handleActive, { passive: true });
+	window.addEventListener("keydown", handleActive, { passive: true });
+	window.addEventListener("touchstart", handleActive, { passive: true });
+}
 function subscribeToIssues(callback) {
 	callback([]);
 	const issuesRef = ref(db, "issues");
@@ -2240,10 +2265,13 @@ function subscribeToIssues(callback) {
 }
 function message(error) {
 	if (!(error instanceof Error)) return "Something went wrong. Please try again.";
+	if (error.message.includes("auth/quota-exceeded")) return "Monthly service quota reached (Spark tier limit: 50,000 active users). Please try again later.";
+	if (error.message.includes("auth/too-many-requests")) return "Too many requests. Please wait a moment before trying again.";
 	if (error.message.includes("auth/email-already-in-use")) return "This email is already registered. Try signing in.";
 	if (error.message.includes("auth/invalid-credential") || error.message.includes("auth/user-not-found") || error.message.includes("auth/wrong-password")) return "Email or password is incorrect.";
 	if (error.message.includes("auth/weak-password")) return "Choose a password with at least 6 characters.";
 	if (error.message.includes("auth/invalid-verification-code")) return "Invalid OTP code. Please check and try again.";
+	if (error.message.includes("max-connections") || error.message.includes("connection-limit")) return "Server is experiencing high traffic (maximum 100 simultaneous users reached). Retrying...";
 	return error.message.replace("Firebase: ", "");
 }
 async function createBoloAccount(input) {
@@ -2256,6 +2284,7 @@ async function createBoloAccount(input) {
 			phone: input.phone,
 			email: input.email,
 			role: "citizen",
+			verified: true,
 			createdAt: Date.now()
 		});
 	} catch (dbErr) {
@@ -2270,14 +2299,40 @@ async function signInWithGoogle() {
 	const provider = new GoogleAuthProvider();
 	const credential = await signInWithPopup(auth, provider);
 	try {
-		await set(ref(db, `users/${credential.user.uid}`), {
-			uid: credential.user.uid,
-			displayName: credential.user.displayName || "Bolo citizen",
-			email: credential.user.email,
-			phone: credential.user.phoneNumber || "",
-			role: "citizen",
-			createdAt: Date.now()
-		});
+		const userRef = ref(db, `users/${credential.user.uid}`);
+		const snap = await get(userRef);
+		if (snap.exists()) {
+			const existingData = snap.val();
+			if (existingData.displayName && existingData.displayName !== credential.user.displayName) await updateProfile(credential.user, { displayName: existingData.displayName });
+			await update(userRef, {
+				verified: existingData.verified ?? true,
+				email: existingData.email || credential.user.email
+			});
+		} else {
+			let existingByEmail = null;
+			if (credential.user.email) try {
+				const userQuery = query(ref(db, "users"), orderByChild("email"), equalTo(credential.user.email));
+				const emailSnap = await get(userQuery);
+				if (emailSnap.exists()) {
+					const list = Object.values(emailSnap.val());
+					if (list.length > 0 && list[0]) existingByEmail = list[0];
+				}
+			} catch (e) {
+				console.warn("Could not check existing user by email:", e);
+			}
+			const finalDisplayName = existingByEmail?.displayName || credential.user.displayName || "Bolo citizen";
+			if (existingByEmail?.displayName && credential.user) await updateProfile(credential.user, { displayName: existingByEmail.displayName });
+			await set(userRef, {
+				uid: credential.user.uid,
+				displayName: finalDisplayName,
+				legalName: existingByEmail?.legalName || "",
+				email: credential.user.email,
+				phone: existingByEmail?.phone || credential.user.phoneNumber || "",
+				role: existingByEmail?.role || "citizen",
+				verified: true,
+				createdAt: existingByEmail?.createdAt || Date.now()
+			});
+		}
 	} catch (dbErr) {
 		console.warn("Could not save Google user profile to Realtime Database:", dbErr);
 	}
@@ -2573,7 +2628,7 @@ function ErrorComponent({ error, reset }) {
 		})
 	});
 }
-var Route$4 = createRootRouteWithContext()({
+var Route$5 = createRootRouteWithContext()({
 	head: () => ({
 		meta: [
 			{ charSet: "utf-8" },
@@ -2644,7 +2699,7 @@ function RootShell({ children }) {
 	});
 }
 function RootComponent() {
-	const { queryClient } = Route$4.useRouteContext();
+	const { queryClient } = Route$5.useRouteContext();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(QueryClientProvider, {
 		client: queryClient,
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AuthProvider, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SessionGate, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(LanguageProvider, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Toaster$1, {
@@ -2682,8 +2737,8 @@ function SessionGate({ children }) {
 	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children });
 }
-var $$splitComponentImporter$3 = () => import("./routes-BQ6_6-_D.mjs");
-var Route$3 = createFileRoute("/")({
+var $$splitComponentImporter$4 = () => import("./routes-myJ5gsrB.mjs");
+var Route$4 = createFileRoute("/")({
 	head: () => ({ meta: [
 		{ title: "Bolo" },
 		{
@@ -2699,15 +2754,15 @@ var Route$3 = createFileRoute("/")({
 			content: "See what your neighbourhood is reporting and how it is progressing."
 		}
 	] }),
+	component: lazyRouteComponent($$splitComponentImporter$4, "component")
+});
+var $$splitComponentImporter$3 = () => import("./auth-CHpmMH24.mjs");
+var Route$3 = createFileRoute("/auth")({
+	head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
 	component: lazyRouteComponent($$splitComponentImporter$3, "component")
 });
-var $$splitComponentImporter$2 = () => import("./auth-DA_9uY3t.mjs");
-var Route$2 = createFileRoute("/auth")({
-	head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
-	component: lazyRouteComponent($$splitComponentImporter$2, "component")
-});
-var $$splitComponentImporter$1 = () => import("./explore-B5iwH7RG.mjs");
-var Route$1 = createFileRoute("/explore")({
+var $$splitComponentImporter$2 = () => import("./explore-dU6NVQ5N.mjs");
+var Route$2 = createFileRoute("/explore")({
 	head: () => ({ meta: [
 		{ title: "Explore issues — Bolo" },
 		{
@@ -2723,10 +2778,10 @@ var Route$1 = createFileRoute("/explore")({
 			content: "Browse a photo-led feed of neighbourhood issues and their progress."
 		}
 	] }),
-	component: lazyRouteComponent($$splitComponentImporter$1, "component")
+	component: lazyRouteComponent($$splitComponentImporter$2, "component")
 });
-var $$splitComponentImporter = () => import("./raise-CV6BSy8j.mjs");
-var Route = createFileRoute("/raise")({
+var $$splitComponentImporter$1 = () => import("./raise-DUNA4MJH.mjs");
+var Route$1 = createFileRoute("/raise")({
 	head: () => ({ meta: [
 		{ title: "Raise an issue — Bolo" },
 		{
@@ -2742,31 +2797,41 @@ var Route = createFileRoute("/raise")({
 			content: "Share what needs attention in your area with photos and clear details."
 		}
 	] }),
+	component: lazyRouteComponent($$splitComponentImporter$1, "component")
+});
+var $$splitComponentImporter = () => import("./waitlist-BA1mabX8.mjs");
+var Route = createFileRoute("/waitlist")({
+	head: () => ({ meta: [{ title: "Join Waitlist — Bolo Civic Connect" }] }),
 	component: lazyRouteComponent($$splitComponentImporter, "component")
 });
 var rootRouteChildren = {
-	IndexRoute: Route$3.update({
+	IndexRoute: Route$4.update({
 		id: "/",
 		path: "/",
-		getParentRoute: () => Route$4
+		getParentRoute: () => Route$5
 	}),
-	AuthRoute: Route$2.update({
+	AuthRoute: Route$3.update({
 		id: "/auth",
 		path: "/auth",
-		getParentRoute: () => Route$4
+		getParentRoute: () => Route$5
 	}),
-	ExploreRoute: Route$1.update({
+	ExploreRoute: Route$2.update({
 		id: "/explore",
 		path: "/explore",
-		getParentRoute: () => Route$4
+		getParentRoute: () => Route$5
 	}),
-	RaiseRoute: Route.update({
+	RaiseRoute: Route$1.update({
 		id: "/raise",
 		path: "/raise",
-		getParentRoute: () => Route$4
+		getParentRoute: () => Route$5
+	}),
+	WaitlistRoute: Route.update({
+		id: "/waitlist",
+		path: "/waitlist",
+		getParentRoute: () => Route$5
 	})
 };
-var routeTree = Route$4._addFileChildren(rootRouteChildren)._addFileTypes();
+var routeTree = Route$5._addFileChildren(rootRouteChildren)._addFileTypes();
 var router_exports = /* @__PURE__ */ __exportAll({ getRouter: () => getRouter });
 var getRouter = () => {
 	const queryClient = new QueryClient();
@@ -2778,4 +2843,4 @@ var getRouter = () => {
 	});
 };
 //#endregion
-export { initAutoLocationDetection as _, deleteIssue as a, LANGUAGES as b, getUserProfile as c, signOutOfBolo as d, submitIssue as f, getCachedUserLocation as g, updateUserProfile as h, createBoloAccount as i, signInToBolo as l, updateIssue as m, Route as n, getFirebaseErrorMessage as o, subscribeToIssues as p, useAuth as r, getUserIssueCount as s, router_exports as t, signInWithGoogle as u, useLanguage as v, t as x, useT as y };
+export { initAutoLocationDetection as _, deleteIssue as a, LANGUAGES as b, getUserProfile as c, signOutOfBolo as d, submitIssue as f, getCachedUserLocation as g, updateUserProfile as h, createBoloAccount as i, signInToBolo as l, updateIssue as m, Route$1 as n, getFirebaseErrorMessage as o, subscribeToIssues as p, useAuth as r, getUserIssueCount as s, router_exports as t, signInWithGoogle as u, useLanguage as v, t as x, useT as y };

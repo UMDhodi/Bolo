@@ -3,15 +3,15 @@ import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
 import { f as Link } from "../_libs/@tanstack/react-router+[...].mjs";
 import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
 import { n as toast } from "../_libs/sonner.mjs";
-import { b as LANGUAGES, c as getUserProfile, d as signOutOfBolo, h as updateUserProfile, o as getFirebaseErrorMessage, r as useAuth, s as getUserIssueCount, v as useLanguage, y as useT } from "./router-Bqs_Dxed.mjs";
+import { b as LANGUAGES, c as getUserProfile, d as signOutOfBolo, h as updateUserProfile, o as getFirebaseErrorMessage, r as useAuth, s as getUserIssueCount, v as useLanguage, y as useT } from "./router-BCpHqYz2.mjs";
 import { t as SpinnerToCheck } from "./loader-64uLEdom.mjs";
-import { C as CircleAlert, D as Check, E as ChevronDown, S as CircleQuestionMark, T as ChevronRight, f as Pen, g as LifeBuoy, j as BadgeCheck, l as ScrollText, r as UserRound, t as X, u as Save, x as Circle, y as Globe } from "../_libs/lucide-react.mjs";
+import { A as ChevronDown, D as CircleAlert, F as BadgeCheck, T as CircleQuestionMark, d as Save, i as UserRound, j as Check, k as ChevronRight, p as Pen, t as X, u as ScrollText, v as LifeBuoy, w as Circle, x as Globe } from "../_libs/lucide-react.mjs";
 import { a as DialogOverlay$1, i as DialogDescription$1, n as DialogClose, o as DialogPortal$1, r as DialogContent$1, s as DialogTitle$1, t as Dialog$1 } from "../_libs/@radix-ui/react-dialog+[...].mjs";
 import { a as Label2, c as Root2, d as SubTrigger2, f as Trigger, i as ItemIndicator2, l as Separator2, n as Content2, o as Portal2, r as Item2, s as RadioItem2, t as CheckboxItem2, u as SubContent2 } from "../_libs/@radix-ui/react-dropdown-menu+[...].mjs";
 import { n as clsx, t as cva } from "../_libs/class-variance-authority+clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
 import { t as Root } from "../_libs/radix-ui__react-label.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/textarea-CBilAxl2.js
+//#region node_modules/.nitro/vite/services/ssr/assets/textarea-BKWF6XWk.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function cn(...inputs) {
@@ -265,7 +265,7 @@ function ProfilePanel({ children }) {
 	if (!user) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children });
 	const displayName = profile?.displayName ?? user.displayName;
 	const [bgColor, textColor] = avatarColor(displayName);
-	const isVerified = Boolean(user.emailVerified || user.phone && user.phone.length > 6);
+	const isVerified = Boolean(profile?.verified ?? (user.emailVerified || user.email && user.email.includes("@") || user.phone && user.phone.length > 6));
 	user.uid.length > 28 ? `${user.uid.slice(0, 28)}` : user.uid;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(DropdownMenu, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DropdownMenuTrigger, {

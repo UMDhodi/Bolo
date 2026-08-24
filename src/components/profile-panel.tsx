@@ -216,7 +216,9 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
 
   const displayName = profile?.displayName ?? user.displayName;
   const [bgColor, textColor] = avatarColor(displayName);
-  const isVerified = Boolean(user.emailVerified || (user.phone && user.phone.length > 6));
+  const isVerified = Boolean(
+    profile?.verified ?? (user.emailVerified || (user.email && user.email.includes("@")) || (user.phone && user.phone.length > 6))
+  );
 
   // Truncate UID for display e.g. 507764d9-82bc-44b3-aa6e-ef092c...
   const truncatedUid = user.uid.length > 28 ? `${user.uid.slice(0, 28)}...` : user.uid;

@@ -104,6 +104,11 @@ function AuthPage() {
       await signInWithGoogle();
       await navigate({ to: "/" });
     } catch (err) {
+      const errStr = (err instanceof Error ? err.message : String(err)).toLowerCase();
+      if (errStr.includes("quota-exceeded") || errStr.includes("quota") || errStr.includes("limit")) {
+        void navigate({ to: "/waitlist" });
+        return;
+      }
       setError(getFirebaseErrorMessage(err));
     } finally {
       setPending(false);
@@ -144,6 +149,11 @@ function AuthPage() {
       }
       await navigate({ to: "/" });
     } catch (nextError) {
+      const errStr = (nextError instanceof Error ? nextError.message : String(nextError)).toLowerCase();
+      if (errStr.includes("quota-exceeded") || errStr.includes("quota")) {
+        void navigate({ to: "/waitlist" });
+        return;
+      }
       setError(getFirebaseErrorMessage(nextError));
     } finally {
       setPending(false);

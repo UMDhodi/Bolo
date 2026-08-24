@@ -115,6 +115,19 @@ var createLucideIcon = (iconName, iconNode) => {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ArrowLeft = createLucideIcon("arrow-left", [["path", {
+	d: "m12 19-7-7 7-7",
+	key: "1l729n"
+}], ["path", {
+	d: "M19 12H5",
+	key: "x3x0zl"
+}]]);
+/**
+* @license lucide-react v0.575.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var ArrowUpRight = createLucideIcon("arrow-up-right", [["path", {
 	d: "M7 7h10v10",
 	key: "1tivn9"
@@ -304,6 +317,21 @@ var CircleAlert = createLucideIcon("circle-alert", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var CircleCheck = createLucideIcon("circle-check", [["circle", {
+	cx: "12",
+	cy: "12",
+	r: "10",
+	key: "1mglay"
+}], ["path", {
+	d: "m9 12 2 2 4-4",
+	key: "dzmm74"
+}]]);
+/**
+* @license lucide-react v0.575.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var CircleQuestionMark = createLucideIcon("circle-question-mark", [
 	["circle", {
 		cx: "12",
@@ -331,6 +359,21 @@ var Circle = createLucideIcon("circle", [["circle", {
 	cy: "12",
 	r: "10",
 	key: "1mglay"
+}]]);
+/**
+* @license lucide-react v0.575.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Clock = createLucideIcon("clock", [["circle", {
+	cx: "12",
+	cy: "12",
+	r: "10",
+	key: "1mglay"
+}], ["path", {
+	d: "M12 6v6l4 2",
+	key: "mmk7yg"
 }]]);
 /**
 * @license lucide-react v0.575.0 - ISC
@@ -520,6 +563,23 @@ var LocateFixed = createLucideIcon("locate-fixed", [
 		key: "1v7zrd"
 	}]
 ]);
+/**
+* @license lucide-react v0.575.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Mail = createLucideIcon("mail", [["path", {
+	d: "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7",
+	key: "132q7q"
+}], ["rect", {
+	x: "2",
+	y: "4",
+	width: "20",
+	height: "16",
+	rx: "2",
+	key: "izxlao"
+}]]);
 /**
 * @license lucide-react v0.575.0 - ISC
 *
@@ -805,6 +865,32 @@ var User = createLucideIcon("user", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Users = createLucideIcon("users", [
+	["path", {
+		d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+		key: "1yyitq"
+	}],
+	["path", {
+		d: "M16 3.128a4 4 0 0 1 0 7.744",
+		key: "16gr8j"
+	}],
+	["path", {
+		d: "M22 21v-2a4 4 0 0 0-3-3.87",
+		key: "kshegd"
+	}],
+	["circle", {
+		cx: "9",
+		cy: "7",
+		r: "4",
+		key: "nufk8"
+	}]
+]);
+/**
+* @license lucide-react v0.575.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var X = createLucideIcon("x", [["path", {
 	d: "M18 6 6 18",
 	key: "1bl5f8"
@@ -813,4 +899,4 @@ var X = createLucideIcon("x", [["path", {
 	key: "d8bk6v"
 }]]);
 //#endregion
-export { Building2 as A, CircleAlert as C, Check as D, ChevronDown as E, ArrowUpRight as M, Camera as O, CircleQuestionMark as S, ChevronRight as T, Languages as _, SwitchCamera as a, CloudUpload as b, Search as c, RefreshCw as d, Pen as f, LifeBuoy as g, LocateFixed as h, Trash2 as i, BadgeCheck as j, CalendarDays as k, ScrollText as l, MapPin as m, User as n, Sparkles as o, PenLine as p, UserRound as r, SlidersHorizontal as s, X as t, Save as u, ImagePlus as v, ChevronUp as w, Circle as x, Globe as y };
+export { ChevronDown as A, Clock as C, CircleAlert as D, CircleCheck as E, BadgeCheck as F, ArrowUpRight as I, ArrowLeft as L, Camera as M, CalendarDays as N, ChevronUp as O, Building2 as P, CloudUpload as S, CircleQuestionMark as T, LocateFixed as _, Trash2 as a, ImagePlus as b, SlidersHorizontal as c, Save as d, RefreshCw as f, Mail as g, MapPin as h, UserRound as i, Check as j, ChevronRight as k, Search as l, PenLine as m, Users as n, SwitchCamera as o, Pen as p, User as r, Sparkles as s, X as t, ScrollText as u, LifeBuoy as v, Circle as w, Globe as x, Languages as y };

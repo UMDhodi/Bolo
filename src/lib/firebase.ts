@@ -25,6 +25,8 @@ import {
   query,
   orderByChild,
   equalTo,
+  goOffline,
+  goOnline,
 } from "firebase/database";
 import { SEED_ISSUES, type Issue } from "./mock-data";
 import { resolveLocationCoordinates } from "./location-resolver";
@@ -44,6 +46,7 @@ export type UserProfile = {
   email?: string | null;
   phone?: string | null;
   role?: string;
+  verified?: boolean;
   createdAt?: number;
 };
 
@@ -75,6 +78,49 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
+// ── Firebase Spark Tier Connection Optimizer (100 Concurrent Connections Cap) ──
+// Automatically releases WebSocket connection when tab is hidden or idle
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  const IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes of inactivity
+
+  const handleActive = () => {
+    try {
+      goOnline(db);
+    } catch {
+      // ignore
+    }
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (document.visibilityState === "hidden") {
+        try {
+          goOffline(db);
+        } catch {
+          // ignore
+        }
+      }
+    }, IDLE_TIMEOUT_MS);
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      // Disconnect immediately on tab switch to preserve 100 connection pool
+      try {
+        goOffline(db);
+      } catch {
+        // ignore
+      }
+    } else {
+      handleActive();
+    }
+  });
+
+  window.addEventListener("focus", handleActive);
+  window.addEventListener("mousemove", handleActive, { passive: true });
+  window.addEventListener("keydown", handleActive, { passive: true });
+  window.addEventListener("touchstart", handleActive, { passive: true });
+}
+
 export function subscribeToIssues(callback: (issues: Issue[]) => void): () => void {
   callback([]);
 
@@ -102,10 +148,13 @@ export function subscribeToIssues(callback: (issues: Issue[]) => void): () => vo
 
 function message(error: unknown) {
   if (!(error instanceof Error)) return "Something went wrong. Please try again.";
+  if (error.message.includes("auth/quota-exceeded")) return "Monthly service quota reached (Spark tier limit: 50,000 active users). Please try again later.";
+  if (error.message.includes("auth/too-many-requests")) return "Too many requests. Please wait a moment before trying again.";
   if (error.message.includes("auth/email-already-in-use")) return "This email is already registered. Try signing in.";
   if (error.message.includes("auth/invalid-credential") || error.message.includes("auth/user-not-found") || error.message.includes("auth/wrong-password")) return "Email or password is incorrect.";
   if (error.message.includes("auth/weak-password")) return "Choose a password with at least 6 characters.";
   if (error.message.includes("auth/invalid-verification-code")) return "Invalid OTP code. Please check and try again.";
+  if (error.message.includes("max-connections") || error.message.includes("connection-limit")) return "Server is experiencing high traffic (maximum 100 simultaneous users reached). Retrying...";
   return error.message.replace("Firebase: ", "");
 }
 
@@ -124,6 +173,7 @@ export async function createBoloAccount(input: {
       phone: input.phone,
       email: input.email,
       role: "citizen",
+      verified: true,
       createdAt: Date.now(),
     });
   } catch (dbErr) {
@@ -141,14 +191,50 @@ export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   const credential = await signInWithPopup(auth, provider);
   try {
-    await set(ref(db, `users/${credential.user.uid}`), {
-      uid: credential.user.uid,
-      displayName: credential.user.displayName || "Bolo citizen",
-      email: credential.user.email,
-      phone: credential.user.phoneNumber || "",
-      role: "citizen",
-      createdAt: Date.now(),
-    });
+    const userRef = ref(db, `users/${credential.user.uid}`);
+    const snap = await get(userRef);
+    if (snap.exists()) {
+      // Existing user: Preserve their customized name, phone, and profile details!
+      const existingData = snap.val() as UserProfile;
+      if (existingData.displayName && existingData.displayName !== credential.user.displayName) {
+        await updateProfile(credential.user, { displayName: existingData.displayName });
+      }
+      await update(userRef, {
+        verified: existingData.verified ?? true,
+        email: existingData.email || credential.user.email,
+      });
+    } else {
+      // Check if an existing account exists by matching email
+      let existingByEmail: UserProfile | null | undefined = null;
+      if (credential.user.email) {
+        try {
+          const userQuery = query(ref(db, "users"), orderByChild("email"), equalTo(credential.user.email));
+          const emailSnap = await get(userQuery);
+          if (emailSnap.exists()) {
+            const list = Object.values(emailSnap.val() as Record<string, UserProfile>);
+            if (list.length > 0 && list[0]) existingByEmail = list[0];
+          }
+        } catch (e) {
+          console.warn("Could not check existing user by email:", e);
+        }
+      }
+
+      const finalDisplayName = existingByEmail?.displayName || credential.user.displayName || "Bolo citizen";
+      if (existingByEmail?.displayName && credential.user) {
+        await updateProfile(credential.user, { displayName: existingByEmail.displayName });
+      }
+
+      await set(userRef, {
+        uid: credential.user.uid,
+        displayName: finalDisplayName,
+        legalName: existingByEmail?.legalName || "",
+        email: credential.user.email,
+        phone: existingByEmail?.phone || credential.user.phoneNumber || "",
+        role: existingByEmail?.role || "citizen",
+        verified: true,
+        createdAt: existingByEmail?.createdAt || Date.now(),
+      });
+    }
   } catch (dbErr) {
     console.warn("Could not save Google user profile to Realtime Database:", dbErr);
   }

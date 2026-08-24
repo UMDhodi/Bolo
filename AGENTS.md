@@ -10,6 +10,17 @@
 - Multilingual translations are managed in `src/lib/i18n.ts` using the reactive `useT()` hook.
 - All interactive overlays and dialogs use high z-index isolation to coexist with Leaflet maps.
 
+### Firebase Spark Plan Resource Limits & Connection Optimization
+> [!NOTE]
+> **Plan Tier:** Firebase Spark (Free Tier)
+> - **Authentication (MAUs):** 50,000 Monthly Active Users (managed natively by Firebase Auth).
+> - **Realtime Database Simultaneous Connections:** Max 100 concurrent WebSocket connections.
+> 
+> **Connection Pooling Strategy in `src/lib/firebase.ts`:**
+> - Inactivity/background tab optimizer: Calls `goOffline(db)` on `visibilitychange: hidden` or after 3 minutes idle.
+> - Auto-reconnect: Calls `goOnline(db)` on tab focus, touch, or mouse movement to preserve the 100 concurrent connection pool.
+> - Quota error guards: Explicit error messaging for `auth/quota-exceeded` and `max-connections`.
+
 ### Firebase Phone OTP Authentication (Disabled for Spark Plan)
 > [!IMPORTANT]
 > **Status:** Phone OTP is temporarily commented out in the UI because Firebase SMS requires the **Blaze (Pay-as-you-go) Plan** and configured SMS Region policy for India (+91).
