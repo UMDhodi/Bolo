@@ -14,5 +14,8 @@ export default defineConfig({
   },
   // Hard-pin to Vercel preset so Nitro generates the correct serverless function
   // output (.vercel/output) instead of the default cloudflare-module layout.
-  nitro: { preset: "vercel" },
+  nitro: {
+    preset: "vercel",
+    inlineDynamicImports: true,
+  },
 });
