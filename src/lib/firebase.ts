@@ -29,7 +29,7 @@ import {
   goOffline,
   goOnline,
 } from "firebase/database";
-import { SEED_ISSUES, type Issue } from "./mock-data";
+import { type Issue } from "./mock-data";
 import { resolveLocationCoordinates } from "./location-resolver";
 import { sanitizeInput, validateStrongPassword } from "./utils";
 import { logSecurityEvent } from "./security-logger";
@@ -126,67 +126,50 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
 export function subscribeToIssues(callback: (issues: Issue[]) => void): () => void {
   const issuesRef = ref(db, "issues");
-  let hasReceivedData = false;
+  let isSubscribed = true;
 
-  // Direct fast HTTP read from Firebase
-  get(issuesRef)
-    .then((snapshot) => {
-      if (snapshot.exists()) {
-        hasReceivedData = true;
-        const val = snapshot.val();
-        const list: Issue[] = Object.values(val);
-        list.sort((a, b) => (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()));
-        callback(list.length > 0 ? list : SEED_ISSUES);
-      } else {
-        if (!hasReceivedData) {
-          hasReceivedData = true;
-          callback(SEED_ISSUES);
-        }
+  const parseIssues = (val: unknown): Issue[] => {
+    if (!val || typeof val !== "object") return [];
+    const list: Issue[] = Object.entries(val as Record<string, Issue>).map(([key, item]) => {
+      return {
+        ...item,
+        id: item.id || key,
+      };
+    });
+    list.sort((a, b) => (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()));
+    return list;
+  };
+
+  // 1. Direct REST fetch from Firebase Realtime Database endpoint
+  fetch(`${firebaseConfig.databaseURL}/issues.json`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (isSubscribed && data) {
+        callback(parseIssues(data));
       }
     })
     .catch((err) => {
-      console.warn("Direct issues get() notice:", err);
-      if (!hasReceivedData) {
-        hasReceivedData = true;
-        callback(SEED_ISSUES);
-      }
+      console.warn("Direct REST issues fetch notice:", err);
     });
 
-  // Safety timeout guard (ensures UI loader resolves in at most 1.5s)
-  const timeoutId = setTimeout(() => {
-    if (!hasReceivedData) {
-      hasReceivedData = true;
-      callback(SEED_ISSUES);
-    }
-  }, 1500);
-
-  // Realtime stream listener for live updates
+  // 2. Realtime stream subscription via Firebase SDK
   const unsubscribe = onValue(
     issuesRef,
     (snapshot) => {
-      clearTimeout(timeoutId);
-      hasReceivedData = true;
+      if (!isSubscribed) return;
       if (snapshot.exists()) {
-        const val = snapshot.val();
-        const list: Issue[] = Object.values(val);
-        list.sort((a, b) => (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()));
-        callback(list.length > 0 ? list : SEED_ISSUES);
+        callback(parseIssues(snapshot.val()));
       } else {
-        callback(SEED_ISSUES);
+        callback([]);
       }
     },
     (error) => {
-      clearTimeout(timeoutId);
       console.warn("Firebase Realtime Database stream notice:", error);
-      if (!hasReceivedData) {
-        hasReceivedData = true;
-        callback(SEED_ISSUES);
-      }
     }
   );
 
   return () => {
-    clearTimeout(timeoutId);
+    isSubscribed = false;
     unsubscribe();
   };
 }
