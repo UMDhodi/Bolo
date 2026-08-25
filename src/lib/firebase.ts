@@ -191,62 +191,121 @@ function message(error: unknown) {
   return error.message.replace("Firebase: ", "");
 }
 
-export async function createBoloAccount(input: {
-  displayName: string;
-  phone: string;
-  email: string;
-  password: string;
-}) {
-  const pwdValidation = validateStrongPassword(input.password);
+export async function initiateSignupAndSendVerification(email: string, password: string) {
+  const pwdValidation = validateStrongPassword(password);
   if (!pwdValidation.valid) {
-    throw new Error(
-      `Password does not meet security policy: ${pwdValidation.errors.join(", ")}.`
-    );
+    throw new Error(`Password security requirements not met: ${pwdValidation.errors.join(", ")}.`);
   }
 
-  const cleanEmail = input.email.trim().toLowerCase();
-  const hashedPassword = await hashPassword(input.password);
+  const cleanEmail = email.trim().toLowerCase();
+  const hashedPassword = await hashPassword(password);
   let credential;
 
   try {
-    credential = await createUserWithEmailAndPassword(auth, cleanEmail, input.password);
+    credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
   } catch (err: unknown) {
     const errStr = String(err);
     if (errStr.includes("email-already-in-use")) {
-      credential = await signInWithEmailAndPassword(auth, cleanEmail, input.password);
+      credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
     } else {
       throw err;
     }
   }
 
   if (credential && credential.user) {
-    await updateProfile(credential.user, { displayName: input.displayName });
-
-    // Send native Firebase email verification link
+    // 1. Send native Firebase email verification link immediately
     try {
       await sendEmailVerification(credential.user);
     } catch (mailErr) {
       console.warn("Could not send email verification link:", mailErr);
     }
 
+    // 2. Persist initial user record in Realtime Database
     try {
-      await set(ref(db, `users/${credential.user.uid}`), {
+      const userRef = ref(db, `users/${credential.user.uid}`);
+      const snap = await get(userRef);
+      const existing = snap.exists() ? (snap.val() as Record<string, unknown>) : {};
+      await set(userRef, {
+        ...existing,
         uid: credential.user.uid,
-        displayName: input.displayName,
-        phone: input.phone,
         email: cleanEmail,
         password: hashedPassword,
         role: "citizen",
         verified: false,
-        createdAt: Date.now(),
+        createdAt: existing["createdAt"] || Date.now(),
       });
     } catch (dbErr) {
-      console.warn("Could not save user profile to Realtime Database:", dbErr);
+      console.warn("Could not save initial user record to Realtime Database:", dbErr);
     }
+
     return toBoloUser(credential.user);
   }
 
   throw new Error("Unable to create account.");
+}
+
+export async function saveCitizenProfile(input: {
+  uid: string;
+  displayName: string;
+  legalName?: string;
+  phone?: string;
+  email?: string;
+}): Promise<UserProfile> {
+  const current = auth.currentUser;
+  if (current && input.displayName) {
+    try {
+      await updateProfile(current, { displayName: input.displayName.trim() });
+    } catch (e) {
+      console.warn("Could not update auth displayName:", e);
+    }
+  }
+
+  const cleanPhone = input.phone
+    ? input.phone.startsWith("+91")
+      ? input.phone
+      : `+91${input.phone.replace(/\D/g, "")}`
+    : "";
+
+  const userRef = ref(db, `users/${input.uid}`);
+  let existing: Record<string, unknown> = {};
+  try {
+    const snap = await get(userRef);
+    if (snap.exists()) {
+      existing = snap.val() as Record<string, unknown>;
+    }
+  } catch {
+    // fallback
+  }
+
+  const profilePayload: UserProfile = {
+    ...existing,
+    uid: input.uid,
+    displayName: input.displayName.trim(),
+    legalName: (input.legalName || input.displayName).trim(),
+    phone: cleanPhone || (existing["phone"] as string) || "",
+    email: input.email || current?.email || (existing["email"] as string) || "",
+    role: "citizen",
+    verified: true,
+    updatedAt: Date.now(),
+  };
+
+  await set(userRef, profilePayload);
+  return profilePayload;
+}
+
+export async function createBoloAccount(input: {
+  displayName: string;
+  phone: string;
+  email: string;
+  password: string;
+}) {
+  return await saveCitizenProfile({
+    uid: auth.currentUser?.uid || "",
+    displayName: input.displayName,
+    legalName: input.displayName,
+    phone: input.phone,
+    email: input.email,
+  });
 }
 
 export async function resendVerificationEmail(): Promise<void> {
@@ -781,9 +840,38 @@ function toBoloUser(user: User): BoloUser {
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const snap = await get(ref(db, `users/${uid}`));
-    if (snap.exists()) return snap.val() as UserProfile;
+    if (snap.exists()) {
+      const data = snap.val() as UserProfile;
+      return {
+        ...data,
+        displayName: data.displayName || auth.currentUser?.displayName || "Bolo citizen",
+        legalName: data.legalName || data.displayName || auth.currentUser?.displayName || "Bolo citizen",
+        email: data.email || auth.currentUser?.email || null,
+        phone: data.phone || auth.currentUser?.phoneNumber || null,
+      };
+    }
+    if (auth.currentUser && auth.currentUser.uid === uid) {
+      return {
+        uid,
+        displayName: auth.currentUser.displayName || "Bolo citizen",
+        legalName: auth.currentUser.displayName || "Bolo citizen",
+        email: auth.currentUser.email || null,
+        phone: auth.currentUser.phoneNumber || null,
+        verified: auth.currentUser.emailVerified,
+      };
+    }
     return null;
   } catch {
+    if (auth.currentUser && auth.currentUser.uid === uid) {
+      return {
+        uid,
+        displayName: auth.currentUser.displayName || "Bolo citizen",
+        legalName: auth.currentUser.displayName || "Bolo citizen",
+        email: auth.currentUser.email || null,
+        phone: auth.currentUser.phoneNumber || null,
+        verified: auth.currentUser.emailVerified,
+      };
+    }
     return null;
   }
 }

@@ -198,3 +198,119 @@ export async function verifyPasswordHash(password: string, storedHash: string): 
   const calculated = await hashPassword(password);
   return calculated === storedHash;
 }
+
+/**
+ * Strict email domain validation for account creation.
+ * Enforces valid, reputable providers (Google, Microsoft, Yahoo, Apple, Zoho, Proton, etc.)
+ * and blocks disposable/temporary/burner/spam/fake domains.
+ */
+const ALLOWED_EXACT_DOMAINS = new Set([
+  // Google
+  "gmail.com",
+  "googlemail.com",
+  // Microsoft
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "outlook.in",
+  "hotmail.co.uk",
+  // Yahoo
+  "yahoo.com",
+  "yahoo.co.in",
+  "yahoo.co.uk",
+  "yahoo.ca",
+  "yahoo.com.au",
+  "ymail.com",
+  "rocketmail.com",
+  // Apple
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  // Trusted global providers
+  "zoho.com",
+  "zoho.in",
+  "proton.me",
+  "protonmail.com",
+  "aol.com",
+  "mail.com",
+  "gmx.com",
+  "gmx.net",
+  "tutanota.com",
+  "tuta.io",
+]);
+
+const BLOCKED_DOMAINS = new Set([
+  "tempmail.com", "tempmail.net", "tempmail.org", "temp-mail.org", "temp-mail.io",
+  "10minutemail.com", "10minutemail.net", "10minutemail.org",
+  "guerrillamail.com", "guerrillamail.net", "guerrillamail.org", "guerrillamailblock.com", "sharklasers.com", "grr.la",
+  "mailinator.com", "yopmail.com", "yopmail.fr", "yopmail.net",
+  "trashmail.com", "trashmail.net", "trashmail.org", "throwawaymail.com",
+  "getairmail.com", "dispostable.com", "crazymailing.com", "mailcatch.com",
+  "mytemp.email", "mohmal.com", "burnermail.io", "maildrop.cc", "nada.ltd",
+  "fake.com", "test.com", "example.com", "sample.com", "dummy.com", "abc.com", "xyz.com",
+  "foo.com", "bar.com", "asdf.com", "testing.com", "email.com", "nomail.com",
+]);
+
+export function validateEmailDomain(email: string): { valid: boolean; error?: string } {
+  const clean = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+    return { valid: false, error: "Please enter a valid email format (e.g. name@gmail.com)." };
+  }
+
+  const parts = clean.split("@");
+  if (parts.length !== 2) {
+    return { valid: false, error: "Please enter a valid email address." };
+  }
+
+  const domain = parts[1]!.toLowerCase();
+
+  // 1. Block known disposable, temporary, and test domains
+  if (BLOCKED_DOMAINS.has(domain)) {
+    return {
+      valid: false,
+      error: "Temporary, disposable, or test email domains are not allowed. Please use your genuine email address (Gmail, Outlook, Yahoo, etc.).",
+    };
+  }
+
+  // 2. If it's in the explicit trusted list (Gmail, Outlook, Yahoo, Apple, etc.), it's valid
+  if (ALLOWED_EXACT_DOMAINS.has(domain)) {
+    return { valid: true };
+  }
+
+  // 3. Allow legitimate educational, governmental, or organizational domains (.edu, .edu.in, .gov, .gov.in, .ac.in, .org)
+  const isInstitutional =
+    domain.endsWith(".edu") ||
+    domain.endsWith(".edu.in") ||
+    domain.endsWith(".gov") ||
+    domain.endsWith(".gov.in") ||
+    domain.endsWith(".ac.in") ||
+    domain.endsWith(".org") ||
+    domain.endsWith(".res.in") ||
+    domain.endsWith(".nic.in");
+
+  if (isInstitutional) {
+    return { valid: true };
+  }
+
+  // 4. For other custom corporate domains: block suspicious substrings
+  const suspiciousKeywords = ["temp", "trash", "fake", "burner", "dispos", "throwaway", "mailinator", "10min"];
+  const isSuspicious = suspiciousKeywords.some((kw) => domain.includes(kw));
+  if (isSuspicious) {
+    return {
+      valid: false,
+      error: "Disposable or burner email addresses are not permitted. Please sign up using a genuine email provider.",
+    };
+  }
+
+  // Check valid domain structure (at least domain.tld with valid chars)
+  const domainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+  if (!domainRegex.test(domain) || (domain.split(".").pop()?.length ?? 0) < 2) {
+    return {
+      valid: false,
+      error: "Invalid email domain structure. Please enter a valid email address (e.g. Gmail, Outlook, Yahoo).",
+    };
+  }
+
+  return { valid: true };
+}
