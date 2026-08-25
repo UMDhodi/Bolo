@@ -178,21 +178,32 @@ function SessionGate({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isNavigatingRef = useRef(false);
 
+  // A user is "fully onboarded" only when:
+  // 1. Their email is verified by Firebase
+  // 2. They have set a real display name (not the default placeholder)
+  const isFullyOnboarded =
+    !!user &&
+    user.emailVerified === true &&
+    !!user.displayName &&
+    user.displayName !== "Bolo citizen";
+
   useEffect(() => {
     if (loading) return;
-    if (user && pathname === "/auth" && !isNavigatingRef.current) {
+    // Only redirect away from /auth if the user has fully completed signup
+    if (isFullyOnboarded && pathname === "/auth" && !isNavigatingRef.current) {
       isNavigatingRef.current = true;
       void navigate({ to: "/", replace: true }).finally(() => {
         isNavigatingRef.current = false;
       });
     }
+    // Redirect unauthenticated users away from protected routes
     if (!user && pathname !== "/auth" && pathname !== "/waitlist" && !isNavigatingRef.current) {
       isNavigatingRef.current = true;
       void navigate({ to: "/auth", replace: true }).finally(() => {
         isNavigatingRef.current = false;
       });
     }
-  }, [loading, navigate, pathname, user]);
+  }, [loading, navigate, pathname, user, isFullyOnboarded]);
 
   if (loading) {
     return (
@@ -211,8 +222,8 @@ function SessionGate({ children }: { children: ReactNode }) {
     );
   }
 
-  // If authenticated and on /auth, show transition state while redirecting home
-  if (user && pathname === "/auth") {
+  // If fully onboarded and somehow on /auth, show transition while redirecting home
+  if (isFullyOnboarded && pathname === "/auth") {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-4">
         <p className="text-sm font-semibold text-muted-foreground">Redirecting to home…</p>
@@ -220,5 +231,7 @@ function SessionGate({ children }: { children: ReactNode }) {
     );
   }
 
+  // User exists but is mid-onboarding (unverified email or no profile yet) — stay on /auth
   return <>{children}</>;
 }
+
