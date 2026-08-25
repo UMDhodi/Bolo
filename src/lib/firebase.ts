@@ -336,6 +336,8 @@ export async function signInWithGoogle() {
   return toBoloUser(credential.user);
 }
 
+export { RecaptchaVerifier, type ConfirmationResult };
+
 export function createRecaptchaVerifier(containerId: string) {
   return new RecaptchaVerifier(auth, containerId, {
     size: "invisible",

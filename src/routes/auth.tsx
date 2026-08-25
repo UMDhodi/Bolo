@@ -25,6 +25,11 @@ import {
   signInWithGoogle,
   checkUserExistsByPhone,
   loginOrCreatePhoneUser,
+  createRecaptchaVerifier,
+  sendPhoneOTP,
+  verifyPhoneOTP,
+  RecaptchaVerifier,
+  type ConfirmationResult,
 } from "@/lib/firebase";
 import { sendMsg91Otp, verifyMsg91Otp, resendMsg91Otp, validateIndianPhone, ensureMsg91Sdk } from "@/lib/msg91";
 import { validateStrongPassword } from "@/lib/utils";
@@ -56,6 +61,8 @@ function AuthPage() {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   // States
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +105,7 @@ function AuthPage() {
     setError(null);
     setOtpMessage(null);
     setOtpCode("");
+    setConfirmationResult(null);
     setResendTimer(30);
     setCanResend(false);
   };
@@ -121,7 +129,7 @@ function AuthPage() {
     }
   }
 
-  // 1. Phone OTP: Send OTP
+  // 1. Phone OTP: Send OTP (Dual Engine: Firebase Phone Auth + MSG91)
   async function handleSendPhoneOtp() {
     setError(null);
     setOtpMessage(null);
@@ -131,6 +139,35 @@ function AuthPage() {
       return;
     }
     setPending(true);
+
+    const fullPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
+
+    // A. Try Firebase Native Phone OTP first
+    try {
+      if (!recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current = createRecaptchaVerifier("recaptcha-container");
+      }
+      const result = await sendPhoneOTP(fullPhone, recaptchaVerifierRef.current);
+      setConfirmationResult(result);
+      setOtpMessage(`SMS OTP sent to ${fullPhone}. Check your messages.`);
+      setStep("verify_otp");
+      setResendTimer(30);
+      setCanResend(false);
+      setPending(false);
+      return;
+    } catch (firebaseErr: unknown) {
+      console.warn("Firebase Phone Auth notice, trying MSG91 engine:", firebaseErr);
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {
+          // ignore
+        }
+        recaptchaVerifierRef.current = null;
+      }
+    }
+
+    // B. Fallback to MSG91 engine
     try {
       const response = await sendMsg91Otp(cleanPhone);
       setOtpMessage(response.message);
@@ -149,16 +186,33 @@ function AuthPage() {
     if (!canResend || pending) return;
     setError(null);
     setPending(true);
+    const cleanPhone = phone.replace(/\D/g, "");
+    const fullPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
+
+    // Try Firebase resend first if verifier available
     try {
-      const cleanPhone = phone.replace(/\D/g, "");
-      const response = await resendMsg91Otp(cleanPhone);
-      setOtpMessage(response.message);
+      if (!recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current = createRecaptchaVerifier("recaptcha-container");
+      }
+      const result = await sendPhoneOTP(fullPhone, recaptchaVerifierRef.current);
+      setConfirmationResult(result);
+      setOtpMessage(`New SMS OTP sent to ${fullPhone}.`);
       setResendTimer(30);
       setCanResend(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resend OTP.");
-    } finally {
       setPending(false);
+      return;
+    } catch {
+      // Fallback to MSG91 retry
+      try {
+        const response = await resendMsg91Otp(cleanPhone);
+        setOtpMessage(response.message);
+        setResendTimer(30);
+        setCanResend(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to resend OTP.");
+      } finally {
+        setPending(false);
+      }
     }
   }
 
@@ -173,16 +227,30 @@ function AuthPage() {
     setPending(true);
     try {
       const cleanPhone = phone.replace(/\D/g, "");
+
+      // A. If Firebase confirmation result is active
+      if (confirmationResult) {
+        const verifiedUser = await verifyPhoneOTP(confirmationResult, otpCode.trim());
+        const existingUser = await checkUserExistsByPhone(`+91${cleanPhone}`);
+        if (existingUser && existingUser.displayName && existingUser.displayName !== "Bolo Citizen") {
+          await navigate({ to: "/" });
+        } else {
+          setName(verifiedUser.displayName || "");
+          setEmail(verifiedUser.email || "");
+          setStep("profile");
+        }
+        return;
+      }
+
+      // B. Otherwise verify via MSG91
       await verifyMsg91Otp(cleanPhone, otpCode.trim());
 
       // Check if user profile already exists
       const existingUser = await checkUserExistsByPhone(`+91${cleanPhone}`);
       if (existingUser && existingUser.displayName && existingUser.displayName !== "Bolo Citizen") {
-        // Existing user with complete profile -> sign in directly
         await loginOrCreatePhoneUser({ phone: `+91${cleanPhone}` });
         await navigate({ to: "/" });
       } else {
-        // New user or incomplete profile -> show "Create Profile" form
         if (existingUser) {
           setName(existingUser.displayName || "");
           setEmail(existingUser.email || "");
@@ -424,6 +492,8 @@ function AuthPage() {
 
             {/* Main Dynamic Forms */}
             <form onSubmit={step === "verify_otp" ? handleVerifyPhoneOtp : submit} className="space-y-3" noValidate>
+              {/* Invisible Firebase Recaptcha Container */}
+              <div id="recaptcha-container" />
 
               {/* ========================================================
                * FLOW 1: PHONE OTP FLOW
