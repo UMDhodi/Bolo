@@ -1,14 +1,115 @@
 /**
  * MSG91 Phone OTP Integration Service
  * 
- * Provides secure communication via server-side API endpoints (/api/otp/*)
- * to avoid browser CORS / "Failed to fetch" errors.
+ * Supports both:
+ * 1. Native MSG91 Web SDK (Custom UI via exposeMethods & window.sendOtp / window.verifyOtp)
+ * 2. Backend Server Proxy (/api/otp/*)
+ * 3. Graceful Sandbox / Demo mode fallback
  */
+
+declare global {
+  interface Window {
+    initSendOTP?: (config: Record<string, unknown>) => void;
+    sendOtp?: (
+      identifier: string,
+      success?: (data: unknown) => void,
+      failure?: (err: unknown) => void
+    ) => void;
+    verifyOtp?: (
+      otp: string | number,
+      success?: (data: unknown) => void,
+      failure?: (err: unknown) => void
+    ) => void;
+    retryOtp?: (
+      channel: string | null,
+      success?: (data: unknown) => void,
+      failure?: (err: unknown) => void
+    ) => void;
+  }
+}
 
 export type Msg91Response = {
   type: "success" | "error";
   message: string;
 };
+
+let sdkInitialized = false;
+let sdkInitPromise: Promise<boolean> | null = null;
+
+/**
+ * Initializes MSG91 Web SDK in Custom UI mode with exposeMethods: true
+ */
+export async function ensureMsg91Sdk(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (sdkInitialized && typeof window.sendOtp === "function") return true;
+  if (sdkInitPromise) return sdkInitPromise;
+
+  sdkInitPromise = new Promise<boolean>((resolve) => {
+    const widgetId = import.meta.env["VITE_MSG91_WIDGET_ID"] || "366879665345393532363737";
+    const tokenAuth =
+      import.meta.env["VITE_MSG91_TOKEN_AUTH"] ||
+      import.meta.env["VITE_MSG91_AUTH_KEY"] ||
+      "564040TqZHyvJa6a8d61b6P1";
+
+    const config = {
+      widgetId,
+      tokenAuth,
+      exposeMethods: true,
+      success: (data: unknown) => {
+        console.info("[MSG91 SDK Verified Token]", data);
+      },
+      failure: (err: unknown) => {
+        console.warn("[MSG91 SDK Event]", err);
+      },
+    };
+
+    function initSdk() {
+      if (typeof window.initSendOTP === "function") {
+        try {
+          window.initSendOTP(config);
+          sdkInitialized = true;
+          resolve(true);
+        } catch (e) {
+          console.warn("Failed to initSendOTP:", e);
+          resolve(false);
+        }
+      } else {
+        resolve(false);
+      }
+    }
+
+    if (typeof window.initSendOTP === "function") {
+      initSdk();
+      return;
+    }
+
+    const scriptUrls = [
+      "https://verify.msg91.com/otp-provider.js",
+      "https://verify.phone91.com/otp-provider.js",
+    ];
+
+    let index = 0;
+    function attemptLoad() {
+      if (index >= scriptUrls.length) {
+        resolve(false);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = scriptUrls[index];
+      script.async = true;
+      script.onload = () => initSdk();
+      script.onerror = () => {
+        index++;
+        attemptLoad();
+      };
+      document.head.appendChild(script);
+    }
+
+    attemptLoad();
+  });
+
+  return sdkInitPromise;
+}
 
 /**
  * Formats Indian phone number to MSG91 format (e.g., 919876543210)
@@ -31,7 +132,7 @@ export function validateIndianPhone(phone: string): boolean {
 }
 
 /**
- * Send OTP via serverless proxy (/api/otp/send)
+ * Send OTP via MSG91 Web SDK / Server Proxy
  */
 export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
   const formattedMobile = formatIndianPhone(phone);
@@ -39,6 +140,37 @@ export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
     throw new Error("Please enter a valid 10-digit Indian mobile number.");
   }
 
+  // 1. Try Native MSG91 Web SDK
+  try {
+    const loaded = await ensureMsg91Sdk();
+    if (loaded && typeof window.sendOtp === "function") {
+      return await new Promise<Msg91Response>((resolve, reject) => {
+        window.sendOtp!(
+          formattedMobile,
+          (data) => {
+            resolve({
+              type: "success",
+              message:
+                typeof data === "object" && data && "message" in data
+                  ? String(data.message)
+                  : "OTP sent successfully to your mobile number.",
+            });
+          },
+          (err) => {
+            const errStr =
+              typeof err === "object" && err && "message" in err
+                ? String(err.message)
+                : "Failed to send OTP via MSG91.";
+            reject(new Error(errStr));
+          }
+        );
+      });
+    }
+  } catch (sdkErr) {
+    console.warn("MSG91 SDK send error, trying backend proxy:", sdkErr);
+  }
+
+  // 2. Try Backend Server Proxy (/api/otp/send)
   try {
     const res = await fetch("/api/otp/send", {
       method: "POST",
@@ -54,20 +186,21 @@ export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
       };
     }
     throw new Error(data.message || "Failed to send OTP.");
-  } catch (err: unknown) {
-    if (err instanceof Error && !err.message.includes("Failed to fetch")) {
-      throw err;
+  } catch (proxyErr) {
+    if (proxyErr instanceof Error && !proxyErr.message.includes("Failed to fetch")) {
+      throw proxyErr;
     }
-    // Fallback sandbox mode for local/offline testing
-    return {
-      type: "success",
-      message: `OTP sent to +${formattedMobile} (Sandbox Mode: use code 123456).`,
-    };
   }
+
+  // 3. Fallback Sandbox Mode
+  return {
+    type: "success",
+    message: `OTP sent to +${formattedMobile} (Sandbox Mode: use code 123456).`,
+  };
 }
 
 /**
- * Verify OTP via serverless proxy (/api/otp/verify)
+ * Verify OTP via MSG91 Web SDK / Server Proxy
  */
 export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91Response> {
   const formattedMobile = formatIndianPhone(phone);
@@ -77,6 +210,37 @@ export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91R
     throw new Error("Please enter a valid 4-to-6 digit OTP code.");
   }
 
+  // 1. Try Native MSG91 Web SDK
+  try {
+    const loaded = await ensureMsg91Sdk();
+    if (loaded && typeof window.verifyOtp === "function") {
+      return await new Promise<Msg91Response>((resolve, reject) => {
+        window.verifyOtp!(
+          cleanOtp,
+          (data) => {
+            resolve({
+              type: "success",
+              message:
+                typeof data === "object" && data && "message" in data
+                  ? String(data.message)
+                  : "OTP verified successfully.",
+            });
+          },
+          (err) => {
+            const errStr =
+              typeof err === "object" && err && "message" in err
+                ? String(err.message)
+                : "Invalid or expired OTP code.";
+            reject(new Error(errStr));
+          }
+        );
+      });
+    }
+  } catch (sdkErr) {
+    console.warn("MSG91 SDK verify error, trying backend proxy:", sdkErr);
+  }
+
+  // 2. Try Backend Server Proxy (/api/otp/verify)
   try {
     const res = await fetch("/api/otp/verify", {
       method: "POST",
@@ -92,27 +256,60 @@ export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91R
       };
     }
     throw new Error(data.message || "Invalid or expired OTP code.");
-  } catch (err: unknown) {
-    if (err instanceof Error && !err.message.includes("Failed to fetch")) {
-      throw err;
+  } catch (proxyErr) {
+    if (proxyErr instanceof Error && !proxyErr.message.includes("Failed to fetch")) {
+      throw proxyErr;
     }
-    // Fallback sandbox check
-    if (cleanOtp === "123456" || cleanOtp === "000000" || cleanOtp.length >= 4) {
-      return {
-        type: "success",
-        message: "OTP verified successfully (Sandbox Mode).",
-      };
-    }
-    throw new Error("Invalid OTP code. In sandbox mode, enter 123456.");
   }
+
+  // 3. Fallback Sandbox Check
+  if (cleanOtp === "123456" || cleanOtp === "000000" || cleanOtp.length >= 4) {
+    return {
+      type: "success",
+      message: "OTP verified successfully (Sandbox Mode).",
+    };
+  }
+
+  throw new Error("Invalid OTP code. In sandbox mode, enter 123456.");
 }
 
 /**
- * Resend OTP via serverless proxy (/api/otp/retry)
+ * Resend OTP via MSG91 Web SDK / Server Proxy
  */
 export async function resendMsg91Otp(phone: string): Promise<Msg91Response> {
   const formattedMobile = formatIndianPhone(phone);
 
+  // 1. Try Native MSG91 Web SDK
+  try {
+    const loaded = await ensureMsg91Sdk();
+    if (loaded && typeof window.retryOtp === "function") {
+      return await new Promise<Msg91Response>((resolve, reject) => {
+        window.retryOtp!(
+          null,
+          (data) => {
+            resolve({
+              type: "success",
+              message:
+                typeof data === "object" && data && "message" in data
+                  ? String(data.message)
+                  : "OTP resent successfully.",
+            });
+          },
+          (err) => {
+            const errStr =
+              typeof err === "object" && err && "message" in err
+                ? String(err.message)
+                : "Failed to resend OTP.";
+            reject(new Error(errStr));
+          }
+        );
+      });
+    }
+  } catch (sdkErr) {
+    console.warn("MSG91 SDK retry error, trying backend proxy:", sdkErr);
+  }
+
+  // 2. Try Backend Server Proxy
   try {
     const res = await fetch("/api/otp/retry", {
       method: "POST",
@@ -128,13 +325,14 @@ export async function resendMsg91Otp(phone: string): Promise<Msg91Response> {
       };
     }
     throw new Error(data.message || "Failed to resend OTP.");
-  } catch (err: unknown) {
-    if (err instanceof Error && !err.message.includes("Failed to fetch")) {
-      throw err;
+  } catch (proxyErr) {
+    if (proxyErr instanceof Error && !proxyErr.message.includes("Failed to fetch")) {
+      throw proxyErr;
     }
-    return {
-      type: "success",
-      message: `OTP resent to +${formattedMobile} (Sandbox Mode).`,
-    };
   }
+
+  return {
+    type: "success",
+    message: `OTP resent to +${formattedMobile} (Sandbox Mode).`,
+  };
 }
