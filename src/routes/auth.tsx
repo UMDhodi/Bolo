@@ -67,12 +67,20 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Redirect if already authenticated and finished setup
+  // Redirect if already authenticated, email is verified, and profile is complete
   useEffect(() => {
-    if (user && step === "credentials" && user.displayName && user.displayName !== "Bolo citizen") {
+    if (
+      user &&
+      step === "credentials" &&
+      mode === "signup" &&
+      user.emailVerified &&
+      user.displayName &&
+      user.displayName !== "Bolo citizen"
+    ) {
       void navigate({ to: "/" });
     }
-  }, [user, step, navigate]);
+    // For signin mode, user is explicitly navigated after signInToBolo succeeds
+  }, [user, step, mode, navigate]);
 
   // Resend Countdown Timer
   useEffect(() => {

@@ -293,24 +293,10 @@ export function validateEmailDomain(email: string): { valid: boolean; error?: st
     return { valid: true };
   }
 
-  // 4. For other custom corporate domains: block suspicious substrings
-  const suspiciousKeywords = ["temp", "trash", "fake", "burner", "dispos", "throwaway", "mailinator", "10min"];
-  const isSuspicious = suspiciousKeywords.some((kw) => domain.includes(kw));
-  if (isSuspicious) {
-    return {
-      valid: false,
-      error: "Disposable or burner email addresses are not permitted. Please sign up using a genuine email provider.",
-    };
-  }
-
-  // Check valid domain structure (at least domain.tld with valid chars)
-  const domainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-  if (!domainRegex.test(domain) || (domain.split(".").pop()?.length ?? 0) < 2) {
-    return {
-      valid: false,
-      error: "Invalid email domain structure. Please enter a valid email address (e.g. Gmail, Outlook, Yahoo).",
-    };
-  }
-
-  return { valid: true };
+  // 4. Reject everything else — unknown domains are NOT allowed
+  // This is an allowlist approach: only trusted providers and known institutional TLDs pass
+  return {
+    valid: false,
+    error: "Please use a trusted email provider (Gmail, Outlook, Yahoo, iCloud, Proton, etc.). Random or unknown email domains are not accepted.",
+  };
 }
