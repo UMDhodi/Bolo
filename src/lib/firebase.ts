@@ -32,7 +32,7 @@ import {
 } from "firebase/database";
 import { type Issue } from "./mock-data";
 import { resolveLocationCoordinates } from "./location-resolver";
-import { sanitizeInput, validateStrongPassword } from "./utils";
+import { sanitizeInput, validateStrongPassword, hashPassword, verifyPasswordHash } from "./utils";
 import { logSecurityEvent } from "./security-logger";
 
 export type BoloUser = {
@@ -49,6 +49,7 @@ export type UserProfile = {
   legalName?: string;
   email?: string | null;
   phone?: string | null;
+  password?: string;
   role?: string;
   verified?: boolean;
   createdAt?: number;
@@ -200,27 +201,85 @@ export async function createBoloAccount(input: {
     );
   }
 
-  const credential = await createUserWithEmailAndPassword(auth, input.email, input.password);
-  await updateProfile(credential.user, { displayName: input.displayName });
+  const cleanEmail = input.email.trim().toLowerCase();
+  const hashedPassword = await hashPassword(input.password);
+  let credential;
+
   try {
-    await set(ref(db, `users/${credential.user.uid}`), {
-      uid: credential.user.uid,
-      displayName: input.displayName,
-      phone: input.phone,
-      email: input.email,
-      role: "citizen",
-      verified: true,
-      createdAt: Date.now(),
-    });
-  } catch (dbErr) {
-    console.warn("Could not save user profile to Realtime Database:", dbErr);
+    credential = await createUserWithEmailAndPassword(auth, cleanEmail, input.password);
+  } catch (err: unknown) {
+    const errStr = String(err);
+    if (errStr.includes("email-already-in-use")) {
+      credential = await signInWithEmailAndPassword(auth, cleanEmail, input.password);
+    } else {
+      throw err;
+    }
   }
-  return toBoloUser(credential.user);
+
+  if (credential && credential.user) {
+    await updateProfile(credential.user, { displayName: input.displayName });
+    try {
+      await set(ref(db, `users/${credential.user.uid}`), {
+        uid: credential.user.uid,
+        displayName: input.displayName,
+        phone: input.phone,
+        email: cleanEmail,
+        password: hashedPassword,
+        role: "citizen",
+        verified: true,
+        createdAt: Date.now(),
+      });
+    } catch (dbErr) {
+      console.warn("Could not save user profile to Realtime Database:", dbErr);
+    }
+    return toBoloUser(credential.user);
+  }
+
+  throw new Error("Unable to create account.");
 }
 
 export async function signInToBolo(email: string, password: string) {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
-  return toBoloUser(credential.user);
+  const cleanEmail = email.trim().toLowerCase();
+  const hashedPassword = await hashPassword(password);
+
+  try {
+    const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+    // Ensure encrypted password hash and email are updated in RTDB
+    try {
+      await update(ref(db, `users/${credential.user.uid}`), {
+        password: hashedPassword,
+        email: cleanEmail,
+      });
+    } catch {
+      // ignore
+    }
+    return toBoloUser(credential.user);
+  } catch (err: unknown) {
+    // If standard Auth fails, check if user exists in RTDB by email with matching encrypted password
+    try {
+      const userQuery = query(ref(db, "users"), orderByChild("email"), equalTo(cleanEmail));
+      const snap = await get(userQuery);
+      if (snap.exists()) {
+        const records = Object.values(snap.val() as Record<string, UserProfile>);
+        const matched = records.find((u) => u.password === hashedPassword || (u.email && u.email.toLowerCase() === cleanEmail));
+        if (matched && matched.password === hashedPassword) {
+          if (auth.currentUser && auth.currentUser.uid === matched.uid) {
+            return toBoloUser(auth.currentUser);
+          }
+          // Authenticate session
+          try {
+            const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+            return toBoloUser(newCred.user);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch (lookupErr) {
+      console.warn("Password lookup notice:", lookupErr);
+    }
+    throw err;
+  }
 }
 
 export async function signInWithGoogle() {

@@ -17,6 +17,7 @@ import {
 import civicIllustration from "@/assets/bolo-auth-civic-india.png";
 import { useAuth } from "@/components/auth-context";
 import SpinnerToCheck from "@/components/loader";
+import BSpinnerToCheck from "@/components/bspinnertocheck";
 import {
   createBoloAccount,
   getFirebaseErrorMessage,
@@ -357,36 +358,39 @@ function AuthPage() {
                   role="tab"
                   aria-selected={mode === "signup"}
                   onClick={() => resetAllStates("signup")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
+                    mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  Email
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === "phone"}
-                  onClick={() => resetAllStates("phone")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${mode === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                >
-                  Phone OTP
+                  Sign up
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={mode === "signin"}
                   onClick={() => resetAllStates("signin")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
+                    mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   Sign in
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "phone"}
+                  onClick={() => resetAllStates("phone")}
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
+                    mode === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Phone
                 </button>
               </div>
             )}
 
-            {/* Google OAuth (only on initial credentials step) */}
-            {step === "credentials" && (
+            {/* Google OAuth (only on initial credentials step, excluded on Phone mode) */}
+            {step === "credentials" && mode !== "phone" && (
               <div className="mt-3">
                 <button
                   type="button"
@@ -689,7 +693,7 @@ function AuthPage() {
                   disabled={pending || phone.replace(/\D/g, "").length !== 10}
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {pending ? <SpinnerToCheck size={20} color="#ffffff" bg="#6d28d9" /> : null}
+                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
                   {pending ? "Sending OTP..." : "Send Verification OTP"}
                   {!pending && <ArrowRight className="size-4" />}
                 </button>
@@ -699,7 +703,7 @@ function AuthPage() {
                   disabled={pending || otpCode.trim().length < 4}
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {pending ? <SpinnerToCheck size={20} color="#ffffff" bg="#6d28d9" /> : null}
+                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
                   {pending ? "Verifying..." : "Verify & Continue"}
                 </button>
               ) : mode === "signup" && step === "credentials" ? (
@@ -716,7 +720,7 @@ function AuthPage() {
                   disabled={pending || name.trim().length < 2}
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {pending ? <SpinnerToCheck size={20} color="#ffffff" bg="#6d28d9" /> : null}
+                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
                   {pending ? "Saving Profile..." : "Complete Profile & Enter Bolo"}
                 </button>
               ) : (
@@ -725,7 +729,7 @@ function AuthPage() {
                   disabled={pending}
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {pending ? <SpinnerToCheck size={20} color="#ffffff" bg="#6d28d9" /> : null}
+                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
                   {pending ? "Signing in..." : "Sign in to Bolo"}
                 </button>
               )}

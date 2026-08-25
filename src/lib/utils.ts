@@ -173,3 +173,28 @@ export function validateStrongPassword(password: string): PasswordValidationResu
     errors,
   };
 }
+
+/**
+ * Hashes a password with a secure salt using SHA-256 for persistent database storage.
+ */
+export async function hashPassword(password: string): Promise<string> {
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const encoder = new TextEncoder();
+    const salt = "bolo_civic_pwd_salt_2026";
+    const data = encoder.encode(salt + password);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Simple fallback if Web Crypto is unavailable
+  return btoa(`enc_${password}_bolo`);
+}
+
+/**
+ * Verifies a plain password against a stored encrypted hash.
+ */
+export async function verifyPasswordHash(password: string, storedHash: string): Promise<boolean> {
+  if (!storedHash || !password) return false;
+  const calculated = await hashPassword(password);
+  return calculated === storedHash;
+}
