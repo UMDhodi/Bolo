@@ -23,15 +23,14 @@ import {
   getFirebaseErrorMessage,
   signInToBolo,
   signInWithGoogle,
-  checkUserExistsByPhone,
-  loginOrCreatePhoneUser,
-  createRecaptchaVerifier,
-  sendPhoneOTP,
-  verifyPhoneOTP,
-  RecaptchaVerifier,
-  type ConfirmationResult,
+  // createRecaptchaVerifier,
+  // sendPhoneOTP,
+  // verifyPhoneOTP,
+  // RecaptchaVerifier,
+  // type ConfirmationResult,
 } from "@/lib/firebase";
-import { sendMsg91Otp, verifyMsg91Otp, resendMsg91Otp, validateIndianPhone, ensureMsg91Sdk } from "@/lib/msg91";
+// import { sendMsg91Otp, verifyMsg91Otp, resendMsg91Otp, validateIndianPhone, ensureMsg91Sdk } from "@/lib/msg91";
+import { validateIndianPhone } from "@/lib/msg91";
 import { validateStrongPassword } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
@@ -39,8 +38,8 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-type Mode = "signup" | "phone" | "signin";
-type OnboardingStep = "credentials" | "verify_otp" | "profile";
+type Mode = "signup" | "signin"; // | "phone";
+type OnboardingStep = "credentials" | "profile"; // | "verify_otp";
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -56,7 +55,9 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // OTP Fields
+  /* --------------------------------------------------------------------------
+   * Phone OTP Authentication States & Handlers (Disabled / Commented out for now)
+   * --------------------------------------------------------------------------
   const [otpCode, setOtpCode] = useState("");
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
@@ -64,23 +65,10 @@ function AuthPage() {
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
-  // States
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  // Initialize MSG91 SDK on page mount
   useEffect(() => {
     void ensureMsg91Sdk();
   }, []);
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (user && step === "credentials") {
-      void navigate({ to: "/" });
-    }
-  }, [user, step, navigate]);
-
-  // Resend Countdown Timer
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (step === "verify_otp" && resendTimer > 0) {
@@ -99,15 +87,26 @@ function AuthPage() {
     };
   }, [step, resendTimer]);
 
+  async function handleSendPhoneOtp() { ... }
+  async function handleResendOtp() { ... }
+  async function handleVerifyPhoneOtp(e: FormEvent) { ... }
+  -------------------------------------------------------------------------- */
+
+  // States
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user && step === "credentials") {
+      void navigate({ to: "/" });
+    }
+  }, [user, step, navigate]);
+
   const resetAllStates = (newMode: Mode) => {
     setMode(newMode);
     setStep("credentials");
     setError(null);
-    setOtpMessage(null);
-    setOtpCode("");
-    setConfirmationResult(null);
-    setResendTimer(30);
-    setCanResend(false);
   };
 
   // Google OAuth Handler
@@ -124,141 +123,6 @@ function AuthPage() {
         return;
       }
       setError(getFirebaseErrorMessage(err));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // 1. Phone OTP: Send OTP (Dual Engine: Firebase Phone Auth + MSG91)
-  async function handleSendPhoneOtp() {
-    setError(null);
-    setOtpMessage(null);
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (!validateIndianPhone(cleanPhone)) {
-      setError("Please enter a valid 10-digit Indian mobile number.");
-      return;
-    }
-    setPending(true);
-
-    const fullPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
-
-    // A. Try Firebase Native Phone OTP first
-    try {
-      if (!recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current = createRecaptchaVerifier("recaptcha-container");
-      }
-      const result = await sendPhoneOTP(fullPhone, recaptchaVerifierRef.current);
-      setConfirmationResult(result);
-      setOtpMessage(`SMS OTP sent to ${fullPhone}. Check your messages.`);
-      setStep("verify_otp");
-      setResendTimer(30);
-      setCanResend(false);
-      setPending(false);
-      return;
-    } catch (firebaseErr: unknown) {
-      console.warn("Firebase Phone Auth notice, trying MSG91 engine:", firebaseErr);
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch {
-          // ignore
-        }
-        recaptchaVerifierRef.current = null;
-      }
-    }
-
-    // B. Fallback to MSG91 engine
-    try {
-      const response = await sendMsg91Otp(cleanPhone);
-      setOtpMessage(response.message);
-      setStep("verify_otp");
-      setResendTimer(30);
-      setCanResend(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send OTP.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // 2. Phone OTP: Resend OTP
-  async function handleResendOtp() {
-    if (!canResend || pending) return;
-    setError(null);
-    setPending(true);
-    const cleanPhone = phone.replace(/\D/g, "");
-    const fullPhone = `+91${cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)}`;
-
-    // Try Firebase resend first if verifier available
-    try {
-      if (!recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current = createRecaptchaVerifier("recaptcha-container");
-      }
-      const result = await sendPhoneOTP(fullPhone, recaptchaVerifierRef.current);
-      setConfirmationResult(result);
-      setOtpMessage(`New SMS OTP sent to ${fullPhone}.`);
-      setResendTimer(30);
-      setCanResend(false);
-      setPending(false);
-      return;
-    } catch {
-      // Fallback to MSG91 retry
-      try {
-        const response = await resendMsg91Otp(cleanPhone);
-        setOtpMessage(response.message);
-        setResendTimer(30);
-        setCanResend(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to resend OTP.");
-      } finally {
-        setPending(false);
-      }
-    }
-  }
-
-  // 3. Phone OTP: Verify OTP
-  async function handleVerifyPhoneOtp(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (otpCode.trim().length < 4) {
-      setError("Please enter the OTP sent to your phone.");
-      return;
-    }
-    setPending(true);
-    try {
-      const cleanPhone = phone.replace(/\D/g, "");
-
-      // A. If Firebase confirmation result is active
-      if (confirmationResult) {
-        const verifiedUser = await verifyPhoneOTP(confirmationResult, otpCode.trim());
-        const existingUser = await checkUserExistsByPhone(`+91${cleanPhone}`);
-        if (existingUser && existingUser.displayName && existingUser.displayName !== "Bolo Citizen") {
-          await navigate({ to: "/" });
-        } else {
-          setName(verifiedUser.displayName || "");
-          setEmail(verifiedUser.email || "");
-          setStep("profile");
-        }
-        return;
-      }
-
-      // B. Otherwise verify via MSG91
-      await verifyMsg91Otp(cleanPhone, otpCode.trim());
-
-      // Check if user profile already exists
-      const existingUser = await checkUserExistsByPhone(`+91${cleanPhone}`);
-      if (existingUser && existingUser.displayName && existingUser.displayName !== "Bolo Citizen") {
-        await loginOrCreatePhoneUser({ phone: `+91${cleanPhone}` });
-        await navigate({ to: "/" });
-      } else {
-        if (existingUser) {
-          setName(existingUser.displayName || "");
-          setEmail(existingUser.email || "");
-        }
-        setStep("profile");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to verify OTP.");
     } finally {
       setPending(false);
     }
@@ -337,7 +201,9 @@ function AuthPage() {
       return;
     }
 
-    // --- Phone Flow: Step 3 (Create Profile for New User) ---
+    /* --------------------------------------------------------------------------
+     * Phone Flow Submit Handler (Disabled / Commented out for now)
+     * --------------------------------------------------------------------------
     if (mode === "phone" && step === "profile") {
       if (name.trim().length < 2) {
         return setError("Please enter your full name.");
@@ -345,7 +211,6 @@ function AuthPage() {
       if (email.trim() && !email.includes("@")) {
         return setError("Please enter a valid email address.");
       }
-
       setPending(true);
       try {
         const cleanPhone = phone.replace(/\D/g, "");
@@ -361,6 +226,7 @@ function AuthPage() {
         setPending(false);
       }
     }
+    -------------------------------------------------------------------------- */
   }
 
   const pwdValidation = validateStrongPassword(password);
@@ -402,30 +268,22 @@ function AuthPage() {
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">
               {step === "profile"
                 ? "Complete your profile."
-                : step === "verify_otp"
-                  ? "Verify phone OTP."
-                  : mode === "signup"
-                    ? "Join the change."
-                    : mode === "phone"
-                      ? "Phone quick login."
-                      : "Welcome back."}
+                : mode === "signup"
+                  ? "Join the change."
+                  : "Welcome back."}
             </h1>
 
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {step === "profile"
                 ? "Set up your civic identity. Your contact details remain private and safe."
-                : step === "verify_otp"
-                  ? `Enter the verification code sent to +91 ${phone}.`
-                  : mode === "signup"
-                    ? "Create your Bolo account using email & password."
-                    : mode === "phone"
-                      ? "Fast sign in or register via instant SMS OTP."
-                      : "Sign in to report issues and track resolutions in your area."}
+                : mode === "signup"
+                  ? "Create your Bolo account using email & password."
+                  : "Sign in to report issues and track resolutions in your area."}
             </p>
 
             {/* Mode Selector Tabs (only shown on step 1) */}
             {step === "credentials" && (
-              <div className="mt-3 grid grid-cols-3 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
+              <div className="mt-3 grid grid-cols-2 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
                 <button
                   type="button"
                   role="tab"
@@ -450,6 +308,7 @@ function AuthPage() {
                 >
                   Sign in
                 </button>
+                {/* 
                 <button
                   type="button"
                   role="tab"
@@ -462,11 +321,12 @@ function AuthPage() {
                 >
                   Phone
                 </button>
+                */}
               </div>
             )}
 
-            {/* Google OAuth (only on initial credentials step, excluded on Phone mode) */}
-            {step === "credentials" && mode !== "phone" && (
+            {/* Google OAuth (only on initial credentials step) */}
+            {step === "credentials" && (
               <div className="mt-3">
                 <button
                   type="button"
@@ -491,107 +351,12 @@ function AuthPage() {
             )}
 
             {/* Main Dynamic Forms */}
-            <form onSubmit={step === "verify_otp" ? handleVerifyPhoneOtp : submit} className="space-y-3" noValidate>
-              {/* Invisible Firebase Recaptcha Container */}
+            <form onSubmit={submit} className="space-y-3" noValidate>
+              {/* Invisible Firebase Recaptcha Container (for future phone OTP) */}
               <div id="recaptcha-container" />
 
               {/* ========================================================
-               * FLOW 1: PHONE OTP FLOW
-               * ======================================================== */}
-              {mode === "phone" && step === "credentials" && (
-                <div>
-                  <label htmlFor="phone-input" className="mb-1 block text-xs font-bold text-foreground">
-                    Mobile Number
-                  </label>
-                  <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
-                    <span className="flex items-center gap-1.5 border-r border-input px-3 text-xs font-bold text-foreground">
-                      <Phone className="size-3.5 text-primary" /> +91
-                    </span>
-                    <input
-                      id="phone-input"
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel-national"
-                      disabled={pending}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      placeholder="10-digit mobile number"
-                      className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                      required
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    We will send an instant SMS verification OTP via MSG91.
-                  </p>
-                </div>
-              )}
-
-              {mode === "phone" && step === "verify_otp" && (
-                <div>
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                        <Phone className="size-3.5 text-primary" /> +91 {phone}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => {
-                          setStep("credentials");
-                          setOtpCode("");
-                        }}
-                        className="text-xs font-bold text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none"
-                      >
-                        Change
-                      </button>
-                    </div>
-                    {otpMessage && <p className="mt-1 text-[11px] text-primary">{otpMessage}</p>}
-                  </div>
-
-                  <div className="mt-3">
-                    <label htmlFor="otp-input" className="mb-1 block text-xs font-bold text-foreground">
-                      Enter Verification Code
-                    </label>
-                    <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
-                      <span className="flex items-center border-r border-input px-3 text-muted-foreground">
-                        <KeyRound className="size-4 text-primary" />
-                      </span>
-                      <input
-                        id="otp-input"
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={6}
-                        autoFocus
-                        disabled={pending}
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        placeholder="••••••"
-                        className="h-11 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 font-mono text-lg tracking-widest outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Didn't receive code?</span>
-                    {canResend ? (
-                      <button
-                        type="button"
-                        onClick={handleResendOtp}
-                        disabled={pending}
-                        className="inline-flex items-center gap-1 font-bold text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none"
-                      >
-                        <RotateCw className="size-3" /> Resend OTP
-                      </button>
-                    ) : (
-                      <span>Resend in {resendTimer}s</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ========================================================
-               * FLOW 2: EMAIL / SIGNUP (STEP 1: CREDENTIALS)
+               * FLOW 1: EMAIL / SIGNUP (STEP 1: CREDENTIALS)
                * ======================================================== */}
               {mode === "signup" && step === "credentials" && (
                 <>
@@ -643,7 +408,7 @@ function AuthPage() {
               )}
 
               {/* ========================================================
-               * FLOW 3: SIGN IN FLOW
+               * FLOW 2: SIGN IN FLOW
                * ======================================================== */}
               {mode === "signin" && (
                 <>
@@ -673,19 +438,17 @@ function AuthPage() {
               )}
 
               {/* ========================================================
-               * STEP 2 / 3: CREATE NEW PROFILE (FOR BOTH PHONE & EMAIL)
+               * STEP 2: CREATE NEW PROFILE (AFTER CREDENTIALS)
                * ======================================================== */}
               {step === "profile" && (
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-foreground">
                     <p className="font-bold flex items-center gap-1.5 text-primary">
                       <CheckCircle2 className="size-4" />
-                      {mode === "phone" ? "Mobile Verified" : "Credentials Verified"}
+                      Credentials Verified
                     </p>
                     <p className="mt-0.5 text-muted-foreground">
-                      {mode === "phone"
-                        ? "Enter your name and email to link to your civic profile."
-                        : "Enter your name and mobile number to complete your profile."}
+                      Enter your name and mobile number to complete your profile.
                     </p>
                   </div>
 
@@ -703,67 +466,40 @@ function AuthPage() {
                     required
                   />
 
-                  {/* 2. Phone Input (Readonly if Phone flow, Editable with +91 if Email flow) */}
-                  {mode === "phone" ? (
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-foreground">Mobile Number</label>
-                      <div className="flex items-center justify-between rounded-2xl border border-input bg-secondary/50 px-3 py-2 text-sm">
-                        <span className="font-semibold text-foreground flex items-center gap-2">
-                          <Phone className="size-4 text-primary" /> +91 {phone}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          <Check className="size-3" /> Verified
-                        </span>
-                      </div>
+                  {/* 2. Optional Mobile Number */}
+                  <div>
+                    <label htmlFor="profile-phone" className="mb-1 block text-xs font-bold text-foreground">
+                      Mobile Number (Optional)
+                    </label>
+                    <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
+                      <span className="flex items-center gap-1 border-r border-input px-3 text-xs font-bold text-foreground">
+                        <Phone className="size-3.5 text-primary" /> +91
+                      </span>
+                      <input
+                        id="profile-phone"
+                        type="tel"
+                        inputMode="numeric"
+                        disabled={pending}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="10-digit number"
+                        className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
+                      />
                     </div>
-                  ) : (
-                    <div>
-                      <label htmlFor="profile-phone" className="mb-1 block text-xs font-bold text-foreground">
-                        Mobile Number (Optional)
-                      </label>
-                      <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
-                        <span className="flex items-center gap-1 border-r border-input px-3 text-xs font-bold text-foreground">
-                          <Phone className="size-3.5 text-primary" /> +91
-                        </span>
-                        <input
-                          id="profile-phone"
-                          type="tel"
-                          inputMode="numeric"
-                          disabled={pending}
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                          placeholder="10-digit number"
-                          className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
-                  {/* 3. Email Input (Readonly if Email flow, Editable if Phone flow) */}
-                  {mode === "signup" ? (
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-foreground">Email Address</label>
-                      <div className="flex items-center justify-between rounded-2xl border border-input bg-secondary/50 px-3 py-2 text-sm">
-                        <span className="font-semibold text-foreground flex items-center gap-2">
-                          <Mail className="size-4 text-primary" /> {email}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          <Check className="size-3" /> Verified
-                        </span>
-                      </div>
+                  {/* 3. Verified Email Preview */}
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-foreground">Email Address</label>
+                    <div className="flex items-center justify-between rounded-2xl border border-input bg-secondary/50 px-3 py-2 text-sm">
+                      <span className="font-semibold text-foreground flex items-center gap-2">
+                        <Mail className="size-4 text-primary" /> {email}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        <Check className="size-3" /> Verified
+                      </span>
                     </div>
-                  ) : (
-                    <Field
-                      label="Email Address (Optional)"
-                      type="email"
-                      autoComplete="email"
-                      disabled={pending}
-                      value={email}
-                      onChange={setEmail}
-                      placeholder="you@example.com"
-                      icon={<Mail className="size-4 text-muted-foreground" />}
-                    />
-                  )}
+                  </div>
                 </div>
               )}
 
@@ -775,27 +511,7 @@ function AuthPage() {
               )}
 
               {/* Action Buttons */}
-              {mode === "phone" && step === "credentials" ? (
-                <button
-                  type="button"
-                  onClick={handleSendPhoneOtp}
-                  disabled={pending || phone.replace(/\D/g, "").length !== 10}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                  {pending ? "Sending OTP..." : "Send Verification OTP"}
-                  {!pending && <ArrowRight className="size-4" />}
-                </button>
-              ) : mode === "phone" && step === "verify_otp" ? (
-                <button
-                  type="submit"
-                  disabled={pending || otpCode.trim().length < 4}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                  {pending ? "Verifying..." : "Verify & Continue"}
-                </button>
-              ) : mode === "signup" && step === "credentials" ? (
+              {mode === "signup" && step === "credentials" ? (
                 <button
                   type="submit"
                   disabled={pending || !email || !password || password !== confirmPassword}
