@@ -60,6 +60,9 @@ function AuthPage() {
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
 
+  // Inline email field domain error (shown below the email input, not in the general error box)
+  const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
+
   // States
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -120,6 +123,7 @@ function AuthPage() {
     setError(null);
     setEmailNotice(null);
     setResetSent(false);
+    setEmailFieldError(null);
   };
 
   // Google OAuth Handler
@@ -180,15 +184,23 @@ function AuthPage() {
     setError(null);
     setPending(true);
     try {
-      const isVerified = await checkEmailVerified();
+      if (!auth.currentUser) {
+        setError("No active session found. Please go back and sign up again.");
+        return;
+      }
+      await auth.currentUser.reload();
+      const isVerified = auth.currentUser.emailVerified;
       if (isVerified) {
         setStep("profile");
       } else {
-        setEmailNotice("We haven't detected your verification yet. Please open the link in your email, then click here.");
+        setEmailNotice("Your email has not been verified yet. Please open the link in your inbox (check spam too), then click here again.");
       }
-    } catch {
-      // In case session reloaded, let them proceed
-      setStep("profile");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message.replace("Firebase: ", "")
+          : "Failed to check verification status. Please try again."
+      );
     } finally {
       setPending(false);
     }
@@ -248,12 +260,14 @@ function AuthPage() {
     // --- Sign Up Step 1: Validate Domain & Password -> Dispatch Verification Link ---
     if (mode === "signup" && step === "credentials") {
       const cleanEmail = email.trim().toLowerCase();
-      
+
       // 1. Strict email domain validation (Google, Outlook, Yahoo, etc. & block fake domains)
       const domainCheck = validateEmailDomain(cleanEmail);
       if (!domainCheck.valid) {
-        return setError(domainCheck.error || "Please enter a valid email address.");
+        setEmailFieldError(domainCheck.error || "Please use a valid email provider (Gmail, Outlook, Yahoo, iCloud, etc.).");
+        return;
       }
+      setEmailFieldError(null);
 
       // 2. Strong password validation
       const pwdValidation = validateStrongPassword(password);
@@ -607,20 +621,57 @@ function AuthPage() {
                 {mode === "signup" && step === "credentials" && (
                   <>
                     <div>
-                      <Field
-                        label="Email address (Google, Outlook, Yahoo, etc.)"
-                        type="email"
-                        autoComplete="email"
-                        disabled={pending}
-                        value={email}
-                        onChange={setEmail}
-                        placeholder="you@gmail.com"
-                        icon={<Mail className="size-4 text-muted-foreground" />}
-                        required
-                      />
-                      <p className="mt-1 text-[10px] text-muted-foreground flex items-center gap-1">
-                        <ShieldCheck className="size-3 text-primary" /> Supported providers: Gmail, Outlook, Yahoo, iCloud, Proton, etc.
-                      </p>
+                      <div>
+                        <label
+                          htmlFor="email-address-(google,-outlook,-yahoo,-etc.)"
+                          className="mb-1 block text-xs font-bold text-foreground"
+                        >
+                          Email address (Google, Outlook, Yahoo, etc.)
+                        </label>
+                        <div
+                          className={`flex items-center rounded-2xl border bg-card focus-within:ring-2 focus-within:ring-ring ${
+                            emailFieldError
+                              ? "border-destructive focus-within:ring-destructive"
+                              : "border-input"
+                          }`}
+                        >
+                          <span className="flex items-center pl-3 text-muted-foreground">
+                            <Mail className={`size-4 ${emailFieldError ? "text-destructive" : "text-muted-foreground"}`} />
+                          </span>
+                          <input
+                            id="email-address-(google,-outlook,-yahoo,-etc.)"
+                            type="email"
+                            autoComplete="email"
+                            disabled={pending}
+                            value={email}
+                            onChange={(e) => {
+                              setEmail(e.target.value);
+                              // Clear field error as user types
+                              if (emailFieldError) setEmailFieldError(null);
+                            }}
+                            onBlur={() => {
+                              const cleanEmail = email.trim().toLowerCase();
+                              if (cleanEmail) {
+                                const check = validateEmailDomain(cleanEmail);
+                                setEmailFieldError(check.valid ? null : (check.error ?? null));
+                              }
+                            }}
+                            placeholder="you@gmail.com"
+                            className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                            required
+                          />
+                        </div>
+                        {emailFieldError && (
+                          <p role="alert" className="mt-1 text-[11px] font-medium text-destructive">
+                            {emailFieldError}
+                          </p>
+                        )}
+                        {!emailFieldError && (
+                          <p className="mt-1 text-[10px] text-muted-foreground flex items-center gap-1">
+                            <ShieldCheck className="size-3 text-primary" /> Supported: Gmail, Outlook, Yahoo, iCloud, Proton, etc.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -790,11 +841,11 @@ function AuthPage() {
                 {mode === "signup" && step === "credentials" ? (
                   <button
                     type="submit"
-                    disabled={pending || !email || !password || password !== confirmPassword}
+                    disabled={pending || !email || !password || password !== confirmPassword || !!emailFieldError}
                     className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                    {pending ? "Sending Verification Link..." : "Create Account & Send Verification Link"}
+                    {pending ? "Sending Verification Link..." : "Verify"}
                     {!pending && <ArrowRight className="size-4" />}
                   </button>
                 ) : step === "profile" ? (
@@ -804,7 +855,7 @@ function AuthPage() {
                     className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                    {pending ? "Saving Profile..." : "Complete Profile & Enter Bolo"}
+                    {pending ? "Saving Profile..." : "Create Account"}
                   </button>
                 ) : (
                   <button

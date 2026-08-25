@@ -35,7 +35,7 @@ import {
 } from "firebase/database";
 import { type Issue } from "./mock-data";
 import { resolveLocationCoordinates } from "./location-resolver";
-import { sanitizeInput, validateStrongPassword, hashPassword, verifyPasswordHash } from "./utils";
+import { sanitizeInput, validateStrongPassword } from "./utils";
 import { logSecurityEvent } from "./security-logger";
 
 export type BoloUser = {
@@ -191,6 +191,11 @@ function message(error: unknown) {
   return error.message.replace("Firebase: ", "");
 }
 
+const ACTION_CODE_SETTINGS = {
+  url: "https://bolo-three.vercel.app/",
+  handleCodeInApp: false,
+};
+
 export async function initiateSignupAndSendVerification(email: string, password: string) {
   const pwdValidation = validateStrongPassword(password);
   if (!pwdValidation.valid) {
@@ -198,7 +203,6 @@ export async function initiateSignupAndSendVerification(email: string, password:
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const hashedPassword = await hashPassword(password);
   let credential;
 
   try {
@@ -206,6 +210,7 @@ export async function initiateSignupAndSendVerification(email: string, password:
   } catch (err: unknown) {
     const errStr = String(err);
     if (errStr.includes("email-already-in-use")) {
+      // Sign in to get the credential, then re-send verification if not yet verified
       credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
     } else {
       throw err;
@@ -213,26 +218,26 @@ export async function initiateSignupAndSendVerification(email: string, password:
   }
 
   if (credential && credential.user) {
-    // 1. Send native Firebase email verification link immediately
+    // 1. Send Firebase email verification link with ActionCodeSettings
     try {
-      await sendEmailVerification(credential.user);
+      await sendEmailVerification(credential.user, ACTION_CODE_SETTINGS);
     } catch (mailErr) {
       console.warn("Could not send email verification link:", mailErr);
+      throw new Error("Failed to send verification email. Please try again.");
     }
 
-    // 2. Persist initial user record in Realtime Database
+    // 2. Persist minimal initial record in RTDB — no password stored here
     try {
       const userRef = ref(db, `users/${credential.user.uid}`);
       const snap = await get(userRef);
       const existing = snap.exists() ? (snap.val() as Record<string, unknown>) : {};
       await set(userRef, {
-        ...existing,
         uid: credential.user.uid,
         email: cleanEmail,
-        password: hashedPassword,
-        role: "citizen",
-        verified: false,
-        createdAt: existing["createdAt"] || Date.now(),
+        role: (existing["role"] as string) || "citizen",
+        createdAt: (existing["createdAt"] as number) || Date.now(),
+        displayName: (existing["displayName"] as string) || "",
+        phone: (existing["phone"] as string) || "",
       });
     } catch (dbErr) {
       console.warn("Could not save initial user record to Realtime Database:", dbErr);
@@ -267,26 +272,26 @@ export async function saveCitizenProfile(input: {
     : "";
 
   const userRef = ref(db, `users/${input.uid}`);
-  let existing: Record<string, unknown> = {};
+  let existingCreatedAt: number | null = null;
   try {
     const snap = await get(userRef);
     if (snap.exists()) {
-      existing = snap.val() as Record<string, unknown>;
+      const existingData = snap.val() as Record<string, unknown>;
+      existingCreatedAt = (existingData["createdAt"] as number) || null;
     }
   } catch {
-    // fallback
+    // fallback — proceed without existing data
   }
 
+  // Build the profile payload with only required + safe fields — never store passwords
   const profilePayload: UserProfile = {
-    ...existing,
     uid: input.uid,
     displayName: input.displayName.trim(),
     legalName: (input.legalName || input.displayName).trim(),
-    phone: cleanPhone || (existing["phone"] as string) || "",
-    email: input.email || current?.email || (existing["email"] as string) || "",
+    phone: cleanPhone,
+    email: input.email || current?.email || "",
     role: "citizen",
-    verified: true,
-    updatedAt: Date.now(),
+    createdAt: existingCreatedAt ?? Date.now(),
   };
 
   await set(userRef, profilePayload);
@@ -310,7 +315,7 @@ export async function createBoloAccount(input: {
 
 export async function resendVerificationEmail(): Promise<void> {
   if (auth.currentUser) {
-    await sendEmailVerification(auth.currentUser);
+    await sendEmailVerification(auth.currentUser, ACTION_CODE_SETTINGS);
   } else {
     throw new Error("No active account session found. Please sign in to request a verification email.");
   }
