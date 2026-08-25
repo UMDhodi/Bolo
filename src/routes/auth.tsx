@@ -12,7 +12,7 @@ import {
   ArrowRight,
   RotateCw,
   MailCheck,
-  ExternalLink,
+  KeyRound,
 } from "lucide-react";
 
 import civicIllustration from "@/assets/bolo-auth-civic-india.png";
@@ -25,6 +25,7 @@ import {
   signInWithGoogle,
   resendVerificationEmail,
   checkEmailVerified,
+  sendPasswordResetLink,
 } from "@/lib/firebase";
 import { validateIndianPhone } from "@/lib/msg91";
 import { validateStrongPassword } from "@/lib/utils";
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-type Mode = "signup" | "signin";
+type Mode = "signup" | "signin" | "forgot_password";
 type OnboardingStep = "credentials" | "profile" | "email_sent";
 
 function AuthPage() {
@@ -51,10 +52,11 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Verification Email States
+  // Verification & Reset Email States
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   // States
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ function AuthPage() {
   // Resend Countdown Timer
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    if (step === "email_sent" && resendTimer > 0) {
+    if ((step === "email_sent" || resetSent) && resendTimer > 0) {
       interval = setInterval(() => {
         setResendTimer((prev) => {
           if (prev <= 1) {
@@ -84,13 +86,14 @@ function AuthPage() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [step, resendTimer]);
+  }, [step, resetSent, resendTimer]);
 
   const resetAllStates = (newMode: Mode) => {
     setMode(newMode);
     setStep("credentials");
     setError(null);
     setEmailNotice(null);
+    setResetSent(false);
   };
 
   // Google OAuth Handler
@@ -129,6 +132,23 @@ function AuthPage() {
     }
   }
 
+  // Resend Password Reset Link
+  async function handleResendPasswordReset() {
+    if (!canResend || pending) return;
+    setError(null);
+    setPending(true);
+    try {
+      await sendPasswordResetLink(email.trim());
+      setEmailNotice("New password reset link sent. Please check your inbox.");
+      setResendTimer(30);
+      setCanResend(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend password reset link.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   // Check if user clicked email verification link
   async function handleCheckVerification() {
     setError(null);
@@ -155,6 +175,27 @@ function AuthPage() {
 
     if (!configured) {
       setError("Firebase is not connected yet. Check your database environment variables.");
+      return;
+    }
+
+    // --- Forgot Password Flow ---
+    if (mode === "forgot_password") {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes("@")) {
+        return setError("Please enter a valid email address.");
+      }
+      setPending(true);
+      try {
+        await sendPasswordResetLink(cleanEmail);
+        setResetSent(true);
+        setEmailNotice(`Password reset link sent to ${cleanEmail}. Check your inbox.`);
+        setResendTimer(30);
+        setCanResend(false);
+      } catch (nextError) {
+        setError(getFirebaseErrorMessage(nextError));
+      } finally {
+        setPending(false);
+      }
       return;
     }
 
@@ -262,27 +303,31 @@ function AuthPage() {
             <p className="text-xs font-bold tracking-wider text-primary uppercase">Civic connect</p>
 
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">
-              {step === "email_sent"
-                ? "Check your inbox."
-                : step === "profile"
-                  ? "Complete your profile."
-                  : mode === "signup"
-                    ? "Join the change."
-                    : "Welcome back."}
+              {mode === "forgot_password"
+                ? "Reset your password."
+                : step === "email_sent"
+                  ? "Check your inbox."
+                  : step === "profile"
+                    ? "Complete your profile."
+                    : mode === "signup"
+                      ? "Join the change."
+                      : "Welcome back."}
             </h1>
 
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {step === "email_sent"
-                ? `We sent a verification link to ${email}.`
-                : step === "profile"
-                  ? "Set up your civic identity. Your contact details remain private and safe."
-                  : mode === "signup"
-                    ? "Create your Bolo account using email & password."
-                    : "Sign in to report issues and track resolutions in your area."}
+              {mode === "forgot_password"
+                ? "Enter your registered email and we'll send you a password reset link."
+                : step === "email_sent"
+                  ? `We sent a verification link to ${email}.`
+                  : step === "profile"
+                    ? "Set up your civic identity. Your contact details remain private and safe."
+                    : mode === "signup"
+                      ? "Create your Bolo account using email & password."
+                      : "Sign in to report issues and track resolutions in your area."}
             </p>
 
-            {/* Mode Selector Tabs (only shown on step 1) */}
-            {step === "credentials" && (
+            {/* Mode Selector Tabs (only shown on step 1 and when not in forgot password) */}
+            {step === "credentials" && mode !== "forgot_password" && (
               <div className="mt-3 grid grid-cols-2 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
                 <button
                   type="button"
@@ -311,8 +356,8 @@ function AuthPage() {
               </div>
             )}
 
-            {/* Google OAuth (only on initial credentials step) */}
-            {step === "credentials" && (
+            {/* Google OAuth (only on initial credentials step, not forgot password) */}
+            {step === "credentials" && mode !== "forgot_password" && (
               <div className="mt-3">
                 <button
                   type="button"
@@ -336,9 +381,7 @@ function AuthPage() {
               </div>
             )}
 
-            {/* ========================================================
-             * FLOW 3: VERIFICATION EMAIL SENT NOTICE SCREEN
-             * ======================================================== */}
+            {/* FLOW 3: VERIFICATION EMAIL SENT NOTICE SCREEN */}
             {step === "email_sent" ? (
               <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5 text-center">
@@ -400,13 +443,98 @@ function AuthPage() {
                   </button>
                 </div>
               </div>
+            ) : mode === "forgot_password" ? (
+              /* FLOW 4: FORGOT PASSWORD RESET FLOW */
+              <div className="space-y-3 pt-1">
+                {resetSent ? (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5 text-center">
+                      <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                        <KeyRound className="size-7 stroke-[2.2]" />
+                      </div>
+                      <h2 className="text-base font-bold text-foreground">Password Reset Link Sent</h2>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        We sent a secure password reset link to:
+                      </p>
+                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-card px-3 py-1 text-xs font-bold text-primary shadow-xs">
+                        <Mail className="size-3.5" /> {email}
+                      </div>
+                      <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">
+                        Please open your email inbox and click the reset link to choose a new password.
+                      </p>
+                    </div>
+
+                    {emailNotice && (
+                      <p className="rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                        {emailNotice}
+                      </p>
+                    )}
+
+                    <div className="space-y-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleResendPasswordReset}
+                        disabled={pending || !canResend}
+                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-input bg-card px-4 text-xs font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <RotateCw className="size-3.5" />
+                        {canResend ? "Resend Reset Link" : `Resend Link in ${resendTimer}s`}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => resetAllStates("signin")}
+                        className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90"
+                      >
+                        Back to Sign In
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={submit} className="space-y-3" noValidate>
+                    <Field
+                      label="Your registered email address"
+                      type="email"
+                      autoComplete="email"
+                      autoFocus
+                      disabled={pending}
+                      value={email}
+                      onChange={setEmail}
+                      placeholder="you@example.com"
+                      icon={<Mail className="size-4 text-muted-foreground" />}
+                      required
+                    />
+
+                    {error && (
+                      <p role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+                        {error}
+                      </p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={pending || !email}
+                      className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                      {pending ? "Sending Link..." : "Send Password Reset Link"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => resetAllStates("signin")}
+                      className="inline-flex min-h-9 w-full items-center justify-center text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      Back to Sign In
+                    </button>
+                  </form>
+                )}
+              </div>
             ) : (
               /* Main Dynamic Forms */
               <form onSubmit={submit} className="space-y-3" noValidate>
 
-                {/* ========================================================
-                 * FLOW 1: EMAIL SIGNUP (STEP 1: CREDENTIALS)
-                 * ======================================================== */}
+                {/* FLOW 1: EMAIL SIGNUP (STEP 1: CREDENTIALS) */}
                 {mode === "signup" && step === "credentials" && (
                   <>
                     <Field
@@ -456,9 +584,7 @@ function AuthPage() {
                   </>
                 )}
 
-                {/* ========================================================
-                 * FLOW 2: SIGN IN FLOW
-                 * ======================================================== */}
+                {/* FLOW 2: SIGN IN FLOW */}
                 {mode === "signin" && (
                   <>
                     <Field
@@ -472,23 +598,46 @@ function AuthPage() {
                       icon={<Mail className="size-4 text-muted-foreground" />}
                       required
                     />
-                    <Field
-                      label="Password"
-                      type="password"
-                      autoComplete="current-password"
-                      disabled={pending}
-                      value={password}
-                      onChange={setPassword}
-                      placeholder="Your password"
-                      icon={<Lock className="size-4 text-muted-foreground" />}
-                      required
-                    />
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor="password" className="text-xs font-bold text-foreground">
+                          Password
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode("forgot_password");
+                            setError(null);
+                            setEmailNotice(null);
+                            setResetSent(false);
+                          }}
+                          className="text-xs font-bold text-primary hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+                      <div className={`flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
+                        <span className="flex items-center pl-3 text-muted-foreground">
+                          <Lock className="size-4 text-muted-foreground" />
+                        </span>
+                        <input
+                          id="password"
+                          type="password"
+                          autoComplete="current-password"
+                          disabled={pending}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Your password"
+                          className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                          required
+                        />
+                      </div>
+                    </div>
                   </>
                 )}
 
-                {/* ========================================================
-                 * STEP 2: CREATE PROFILE (BEFORE DISPATCHING VERIFICATION)
-                 * ======================================================== */}
+                {/* STEP 2: CREATE PROFILE (BEFORE DISPATCHING VERIFICATION) */}
                 {step === "profile" && (
                   <div className="space-y-3">
                     <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-foreground">

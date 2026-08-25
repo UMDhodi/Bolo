@@ -15,6 +15,10 @@ import {
   Trash2,
   User,
   X,
+  Lock,
+  KeyRound,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,12 +42,14 @@ import {
   getUserProfile,
   getUserIssueCount,
   updateUserProfile,
+  updateUserPassword,
   exportUserData,
   deleteUserAccount,
   getFirebaseErrorMessage,
   signOutOfBolo,
   type UserProfile,
 } from "@/lib/firebase";
+import { validateStrongPassword } from "@/lib/utils";
 
 // ── Avatar initials helper ──────────────────────────────────────────────────
 export function avatarInitials(name: string) {
@@ -201,6 +207,39 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
   const [exporting, setExporting] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
+
+  const newPwdValidation = validateStrongPassword(newPassword);
+
+  async function handlePasswordUpdate(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    const pwdValidation = validateStrongPassword(newPassword);
+    if (!pwdValidation.valid) {
+      toast.error(`Password requirement: ${pwdValidation.errors.join(", ")}`);
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      await updateUserPassword(newPassword);
+      toast.success("Password updated successfully!");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordExpanded(false);
+    } catch (err) {
+      toast.error(getFirebaseErrorMessage(err));
+    } finally {
+      setUpdatingPassword(false);
+    }
+  }
 
   async function handleExportData() {
     if (!user) return;
@@ -442,6 +481,102 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
+            {/* ── Direct Password Change (No verification link system, updates stored under user UID) ── */}
+            <div className="flex flex-col gap-2 rounded-2xl border border-border/80 bg-card p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <Lock className="size-3.5 text-primary" /> Password & Security
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasswordExpanded(!passwordExpanded);
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                >
+                  {passwordExpanded ? (
+                    <>
+                      Cancel <ChevronUp className="size-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      Change Password <ChevronDown className="size-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {passwordExpanded && (
+                <form onSubmit={handlePasswordUpdate} className="flex flex-col gap-2.5 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold text-foreground">
+                      New Password
+                    </label>
+                    <div className="flex items-center rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                      <span className="pl-3 text-muted-foreground">
+                        <KeyRound className="size-3.5" />
+                      </span>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        disabled={updatingPassword}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="8+ characters (Aa, 1, #)"
+                        className="h-9 w-full rounded-xl bg-transparent px-3 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                        required
+                      />
+                    </div>
+                    {newPassword && (
+                      <div className="mt-1.5 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                        <RequirementItem met={newPwdValidation.hasMinLength} label="8+ chars" />
+                        <RequirementItem met={newPwdValidation.hasUpper} label="Uppercase" />
+                        <RequirementItem met={newPwdValidation.hasLower} label="Lowercase" />
+                        <RequirementItem met={newPwdValidation.hasNumber} label="Number" />
+                        <RequirementItem met={newPwdValidation.hasSpecial} label="Symbol" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold text-foreground">
+                      Confirm New Password
+                    </label>
+                    <div className="flex items-center rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                      <span className="pl-3 text-muted-foreground">
+                        <KeyRound className="size-3.5" />
+                      </span>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        disabled={updatingPassword}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat new password"
+                        className="h-9 w-full rounded-xl bg-transparent px-3 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={updatingPassword || !newPassword || newPassword !== confirmPassword}
+                    className="mt-1 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {updatingPassword ? (
+                      <SpinnerToCheck size={16} color="#ffffff" bg="#0f766e" />
+                    ) : (
+                      <Save className="size-3.5" />
+                    )}
+                    {updatingPassword ? "Updating Password..." : "Update Password"}
+                  </button>
+                </form>
+              )}
+            </div>
+
             {/* Privacy & Compliance Actions (GDPR / DPDP) */}
             <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-border/70 bg-secondary/30 p-3.5">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -568,5 +703,22 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function RequirementItem({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div
+      className={`flex items-center gap-1 text-[10px] transition-colors ${
+        met ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80"
+      }`}
+    >
+      {met ? (
+        <Check className="size-3 shrink-0 stroke-[3]" />
+      ) : (
+        <span className="inline-block size-1.5 rounded-full bg-muted-foreground/40 ml-1 mr-0.5" />
+      )}
+      <span>{label}</span>
+    </div>
   );
 }

@@ -13,6 +13,8 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   sendEmailVerification,
+  sendPasswordResetEmail,
+  updatePassword,
   type ConfirmationResult,
   type User,
 } from "firebase/auth";
@@ -261,6 +263,37 @@ export async function checkEmailVerified(): Promise<boolean> {
     return auth.currentUser.emailVerified;
   }
   return false;
+}
+
+export async function sendPasswordResetLink(email: string): Promise<void> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    throw new Error("Please enter a valid email address.");
+  }
+  await sendPasswordResetEmail(auth, cleanEmail);
+}
+
+export async function updateUserPassword(newPassword: string): Promise<void> {
+  if (!auth.currentUser) {
+    throw new Error("No active user session found. Please sign in.");
+  }
+  const pwdValidation = validateStrongPassword(newPassword);
+  if (!pwdValidation.valid) {
+    throw new Error(`Password requirement: ${pwdValidation.errors.join(", ")}.`);
+  }
+
+  // 1. Direct Firebase Auth password update (no verification link required)
+  await updatePassword(auth.currentUser, newPassword);
+
+  // 2. Encrypt and store password hash in Realtime Database under users/${uid}
+  const hashedPassword = await hashPassword(newPassword);
+  try {
+    await update(ref(db, `users/${auth.currentUser.uid}`), {
+      password: hashedPassword,
+    });
+  } catch (dbErr) {
+    console.warn("Could not sync updated password hash to Realtime Database:", dbErr);
+  }
 }
 
 export async function signInToBolo(email: string, password: string) {
