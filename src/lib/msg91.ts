@@ -7,8 +7,9 @@
  * - Resend OTP: https://control.msg91.com/api/v5/otp/retry
  */
 
-const MSG91_AUTH_KEY = import.meta.env["VITE_MSG91_AUTH_KEY"] || "";
+const MSG91_AUTH_KEY = import.meta.env["VITE_MSG91_AUTH_KEY"] || import.meta.env["VITE_MSG91_TOKEN_AUTH"] || "";
 const MSG91_TEMPLATE_ID = import.meta.env["VITE_MSG91_TEMPLATE_ID"] || "";
+const MSG91_WIDGET_ID = import.meta.env["VITE_MSG91_WIDGET_ID"] || "";
 
 export type Msg91Response = {
   type: "success" | "error";
@@ -36,7 +37,7 @@ export function validateIndianPhone(phone: string): boolean {
 }
 
 /**
- * Send OTP via MSG91 v5 API
+ * Send OTP via MSG91 v5 API / OTP Widget
  */
 export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
   const formattedMobile = formatIndianPhone(phone);
@@ -44,11 +45,12 @@ export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
     throw new Error("Please enter a valid 10-digit Indian mobile number.");
   }
 
-  // If MSG91 credentials are provided, call the live MSG91 API
-  if (MSG91_AUTH_KEY && MSG91_TEMPLATE_ID) {
+  // If MSG91 credentials (AuthKey or WidgetId) are provided, call live API
+  if (MSG91_AUTH_KEY && (MSG91_TEMPLATE_ID || MSG91_WIDGET_ID)) {
     try {
       const url = new URL("https://control.msg91.com/api/v5/otp");
-      url.searchParams.append("template_id", MSG91_TEMPLATE_ID);
+      if (MSG91_TEMPLATE_ID) url.searchParams.append("template_id", MSG91_TEMPLATE_ID);
+      if (MSG91_WIDGET_ID) url.searchParams.append("widgetId", MSG91_WIDGET_ID);
       url.searchParams.append("mobile", formattedMobile);
       url.searchParams.append("authkey", MSG91_AUTH_KEY);
 
@@ -83,7 +85,7 @@ export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
 }
 
 /**
- * Verify OTP via MSG91 v5 API
+ * Verify OTP via MSG91 v5 API / OTP Widget
  */
 export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91Response> {
   const formattedMobile = formatIndianPhone(phone);
@@ -100,6 +102,7 @@ export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91R
       url.searchParams.append("otp", cleanOtp);
       url.searchParams.append("mobile", formattedMobile);
       url.searchParams.append("authkey", MSG91_AUTH_KEY);
+      if (MSG91_WIDGET_ID) url.searchParams.append("widgetId", MSG91_WIDGET_ID);
 
       const response = await fetch(url.toString(), {
         method: "GET",
@@ -135,7 +138,7 @@ export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91R
 }
 
 /**
- * Resend OTP via MSG91 v5 API
+ * Resend OTP via MSG91 v5 API / OTP Widget
  */
 export async function resendMsg91Otp(phone: string): Promise<Msg91Response> {
   const formattedMobile = formatIndianPhone(phone);
@@ -146,6 +149,7 @@ export async function resendMsg91Otp(phone: string): Promise<Msg91Response> {
       url.searchParams.append("authkey", MSG91_AUTH_KEY);
       url.searchParams.append("mobile", formattedMobile);
       url.searchParams.append("retrytype", "text");
+      if (MSG91_WIDGET_ID) url.searchParams.append("widgetId", MSG91_WIDGET_ID);
 
       const response = await fetch(url.toString(), {
         method: "POST",
