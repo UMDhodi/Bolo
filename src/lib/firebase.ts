@@ -9,6 +9,7 @@ import {
   deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously,
   RecaptchaVerifier,
   signInWithPhoneNumber,
   type ConfirmationResult,
@@ -305,6 +306,64 @@ export async function verifyPhoneOTP(confirmationResult: ConfirmationResult, cod
     console.warn("Could not save phone user profile to Realtime Database:", dbErr);
   }
   return toBoloUser(credential.user);
+}
+
+export async function checkUserExistsByPhone(phoneNumber: string): Promise<UserProfile | null> {
+  const formattedPhone = phoneNumber.startsWith("+91") ? phoneNumber : `+91${phoneNumber.replace(/\D/g, "")}`;
+  try {
+    const userQuery = query(ref(db, "users"), orderByChild("phone"), equalTo(formattedPhone));
+    const snap = await get(userQuery);
+    if (snap.exists()) {
+      const records = Object.values(snap.val() as Record<string, UserProfile>);
+      if (records.length > 0 && records[0]) return records[0];
+    }
+  } catch (err) {
+    console.warn("Could not query user by phone:", err);
+  }
+  return null;
+}
+
+export async function loginOrCreatePhoneUser(input: {
+  phone: string;
+  displayName?: string;
+  email?: string;
+}) {
+  const formattedPhone = input.phone.startsWith("+91") ? input.phone : `+91${input.phone.replace(/\D/g, "")}`;
+  
+  // 1. Ensure Firebase Auth session exists
+  let currentUser = auth.currentUser;
+  if (!currentUser) {
+    const anonCred = await signInAnonymously(auth);
+    currentUser = anonCred.user;
+  }
+
+  // 2. Check if a profile already exists for this phone number
+  const existingProfile = await checkUserExistsByPhone(formattedPhone);
+
+  const finalName = sanitizeInput(input.displayName || existingProfile?.displayName || "Bolo Citizen");
+  const finalEmail = sanitizeInput(input.email || existingProfile?.email || "");
+
+  if (currentUser && finalName) {
+    try {
+      await updateProfile(currentUser, { displayName: finalName });
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Save or update profile in users/${currentUser.uid}
+  const userRef = ref(db, `users/${currentUser.uid}`);
+  await set(userRef, {
+    uid: currentUser.uid,
+    displayName: finalName,
+    phone: formattedPhone,
+    email: finalEmail,
+    role: existingProfile?.role || "citizen",
+    verified: true,
+    createdAt: existingProfile?.createdAt || Date.now(),
+  });
+
+  return toBoloUser(currentUser);
 }
 
 export async function signOutOfBolo() {
