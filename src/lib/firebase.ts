@@ -433,12 +433,14 @@ export async function loginOrCreatePhoneUser(input: {
   // Save profile in users/${currentUser.uid}
   if (currentUser) {
     try {
+      const hashedSynthetic = await hashPassword(syntheticPassword);
       const userRef = ref(db, `users/${currentUser.uid}`);
       await set(userRef, {
         uid: currentUser.uid,
         displayName: finalName,
         phone: formattedPhone,
         email: finalEmail || currentUser.email || "",
+        password: hashedSynthetic,
         role: "citizen",
         verified: true,
         createdAt: Date.now(),

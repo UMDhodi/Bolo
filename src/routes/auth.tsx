@@ -356,9 +356,10 @@ function AuthPage() {
                 <button
                   type="button"
                   role="tab"
+                  disabled={pending}
                   aria-selected={mode === "signup"}
                   onClick={() => resetAllStates("signup")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-60 ${
                     mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -367,9 +368,10 @@ function AuthPage() {
                 <button
                   type="button"
                   role="tab"
+                  disabled={pending}
                   aria-selected={mode === "signin"}
                   onClick={() => resetAllStates("signin")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-60 ${
                     mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -378,9 +380,10 @@ function AuthPage() {
                 <button
                   type="button"
                   role="tab"
+                  disabled={pending}
                   aria-selected={mode === "phone"}
                   onClick={() => resetAllStates("phone")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-60 ${
                     mode === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -396,7 +399,7 @@ function AuthPage() {
                   type="button"
                   onClick={handleGoogleAuth}
                   disabled={pending}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2.5 rounded-2xl border border-input bg-card px-4 text-xs font-bold text-foreground shadow-soft transition-colors hover:bg-secondary disabled:opacity-70"
+                  className="inline-flex min-h-10 w-full items-center justify-center gap-2.5 rounded-2xl border border-input bg-card px-4 text-xs font-bold text-foreground shadow-soft transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <svg className="size-4" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -425,7 +428,7 @@ function AuthPage() {
                   <label htmlFor="phone-input" className="mb-1 block text-xs font-bold text-foreground">
                     Mobile Number
                   </label>
-                  <div className="flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
+                  <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
                     <span className="flex items-center gap-1.5 border-r border-input px-3 text-xs font-bold text-foreground">
                       <Phone className="size-3.5 text-primary" /> +91
                     </span>
@@ -434,10 +437,11 @@ function AuthPage() {
                       type="tel"
                       inputMode="numeric"
                       autoComplete="tel-national"
+                      disabled={pending}
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                       placeholder="10-digit mobile number"
-                      className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
+                      className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
                       required
                     />
                   </div>
@@ -456,11 +460,12 @@ function AuthPage() {
                       </span>
                       <button
                         type="button"
+                        disabled={pending}
                         onClick={() => {
                           setStep("credentials");
                           setOtpCode("");
                         }}
-                        className="text-xs font-bold text-primary hover:underline"
+                        className="text-xs font-bold text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none"
                       >
                         Change
                       </button>
@@ -472,7 +477,7 @@ function AuthPage() {
                     <label htmlFor="otp-input" className="mb-1 block text-xs font-bold text-foreground">
                       Enter Verification Code
                     </label>
-                    <div className="flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
+                    <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
                       <span className="flex items-center border-r border-input px-3 text-muted-foreground">
                         <KeyRound className="size-4 text-primary" />
                       </span>
@@ -482,10 +487,11 @@ function AuthPage() {
                         inputMode="numeric"
                         maxLength={6}
                         autoFocus
+                        disabled={pending}
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                         placeholder="••••••"
-                        className="h-11 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 font-mono text-lg tracking-widest outline-none placeholder:text-muted-foreground"
+                        className="h-11 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 font-mono text-lg tracking-widest outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
                         required
                       />
                     </div>
@@ -498,7 +504,7 @@ function AuthPage() {
                         type="button"
                         onClick={handleResendOtp}
                         disabled={pending}
-                        className="inline-flex items-center gap-1 font-bold text-primary hover:underline"
+                        className="inline-flex items-center gap-1 font-bold text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none"
                       >
                         <RotateCw className="size-3" /> Resend OTP
                       </button>
@@ -518,6 +524,7 @@ function AuthPage() {
                     label="Email address"
                     type="email"
                     autoComplete="email"
+                    disabled={pending}
                     value={email}
                     onChange={setEmail}
                     placeholder="you@example.com"
@@ -530,6 +537,7 @@ function AuthPage() {
                       label="Create password"
                       type="password"
                       autoComplete="new-password"
+                      disabled={pending}
                       value={password}
                       onChange={setPassword}
                       placeholder="8+ characters (Aa, 1, #)"
@@ -549,6 +557,7 @@ function AuthPage() {
                     label="Confirm password"
                     type="password"
                     autoComplete="new-password"
+                    disabled={pending}
                     value={confirmPassword}
                     onChange={setConfirmPassword}
                     placeholder="Repeat your password"
@@ -567,6 +576,7 @@ function AuthPage() {
                     label="Email address"
                     type="email"
                     autoComplete="email"
+                    disabled={pending}
                     value={email}
                     onChange={setEmail}
                     placeholder="you@example.com"
@@ -577,6 +587,7 @@ function AuthPage() {
                     label="Password"
                     type="password"
                     autoComplete="current-password"
+                    disabled={pending}
                     value={password}
                     onChange={setPassword}
                     placeholder="Your password"
@@ -609,6 +620,7 @@ function AuthPage() {
                     type="text"
                     autoComplete="name"
                     autoFocus
+                    disabled={pending}
                     value={name}
                     onChange={setName}
                     placeholder="e.g. Aditi Sharma"
@@ -634,7 +646,7 @@ function AuthPage() {
                       <label htmlFor="profile-phone" className="mb-1 block text-xs font-bold text-foreground">
                         Mobile Number (Optional)
                       </label>
-                      <div className="flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
+                      <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
                         <span className="flex items-center gap-1 border-r border-input px-3 text-xs font-bold text-foreground">
                           <Phone className="size-3.5 text-primary" /> +91
                         </span>
@@ -642,10 +654,11 @@ function AuthPage() {
                           id="profile-phone"
                           type="tel"
                           inputMode="numeric"
+                          disabled={pending}
                           value={phone}
                           onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                           placeholder="10-digit number"
-                          className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none"
+                          className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -669,6 +682,7 @@ function AuthPage() {
                       label="Email Address (Optional)"
                       type="email"
                       autoComplete="email"
+                      disabled={pending}
                       value={email}
                       onChange={setEmail}
                       placeholder="you@example.com"
@@ -772,13 +786,13 @@ function Field({
       <label htmlFor={id} className="mb-1 block text-xs font-bold text-foreground">
         {label}
       </label>
-      <div className="flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
+      <div className={`flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${props.disabled ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
         {icon && <span className="flex items-center pl-3 text-muted-foreground">{icon}</span>}
         <input
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground"
+          className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
           {...props}
         />
       </div>
