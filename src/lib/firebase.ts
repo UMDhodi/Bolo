@@ -967,7 +967,12 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     console.warn("Could not delete user database record:", err);
   }
 
-  // 2. Delete the user authentication record from Firebase Auth
+  // 2. Clear session cookie
+  if (typeof document !== "undefined") {
+    document.cookie = "bolo_session=; Path=/; Max-Age=0; SameSite=Lax";
+  }
+
+  // 3. Delete the user authentication record from Firebase Auth
   await deleteUser(current);
 }
 

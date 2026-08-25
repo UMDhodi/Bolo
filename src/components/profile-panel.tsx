@@ -271,9 +271,11 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
       toast.success("Your account and profile have been permanently deleted.");
       setDeleteConfirmOpen(false);
       setProfileDialogOpen(false);
+      if (typeof window !== "undefined") {
+        window.location.href = "/auth";
+      }
     } catch (err) {
       toast.error(getFirebaseErrorMessage(err));
-    } finally {
       setDeletingAccount(false);
     }
   }
