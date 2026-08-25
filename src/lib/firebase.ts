@@ -337,11 +337,8 @@ export async function loginOrCreatePhoneUser(input: {
     currentUser = anonCred.user;
   }
 
-  // 2. Check if a profile already exists for this phone number
-  const existingProfile = await checkUserExistsByPhone(formattedPhone);
-
-  const finalName = sanitizeInput(input.displayName || existingProfile?.displayName || "Bolo Citizen");
-  const finalEmail = sanitizeInput(input.email || existingProfile?.email || "");
+  const finalName = sanitizeInput(input.displayName || "Bolo Citizen");
+  const finalEmail = sanitizeInput(input.email || "");
 
   if (currentUser && finalName) {
     try {
@@ -351,17 +348,21 @@ export async function loginOrCreatePhoneUser(input: {
     }
   }
 
-  // 3. Save or update profile in users/${currentUser.uid}
-  const userRef = ref(db, `users/${currentUser.uid}`);
-  await set(userRef, {
-    uid: currentUser.uid,
-    displayName: finalName,
-    phone: formattedPhone,
-    email: finalEmail,
-    role: existingProfile?.role || "citizen",
-    verified: true,
-    createdAt: existingProfile?.createdAt || Date.now(),
-  });
+  // 2. Save or update profile in users/${currentUser.uid}
+  try {
+    const userRef = ref(db, `users/${currentUser.uid}`);
+    await set(userRef, {
+      uid: currentUser.uid,
+      displayName: finalName,
+      phone: formattedPhone,
+      email: finalEmail,
+      role: "citizen",
+      verified: true,
+      createdAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn("Could not save phone user profile in RTDB:", err);
+  }
 
   return toBoloUser(currentUser);
 }

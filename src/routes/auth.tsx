@@ -168,21 +168,8 @@ function AuthPage() {
     try {
       const cleanPhone = phone.replace(/\D/g, "");
       await verifyMsg91Otp(cleanPhone, otpCode.trim());
-
-      // Check if user profile already exists
-      const existingUser = await checkUserExistsByPhone(`+91${cleanPhone}`);
-      if (existingUser && existingUser.displayName && existingUser.displayName !== "Bolo Citizen") {
-        // Existing user with complete profile -> sign in directly
-        await loginOrCreatePhoneUser({ phone: `+91${cleanPhone}` });
-        await navigate({ to: "/" });
-      } else {
-        // New user or incomplete profile -> show "Create Profile" form
-        if (existingUser) {
-          setName(existingUser.displayName || "");
-          setEmail(existingUser.email || "");
-        }
-        setStep("profile");
-      }
+      // Step 1 requirement: After submit OTP, show create new profile form
+      setStep("profile");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to verify OTP.");
     } finally {
