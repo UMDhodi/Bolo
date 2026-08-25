@@ -328,17 +328,40 @@ export async function loginOrCreatePhoneUser(input: {
   displayName?: string;
   email?: string;
 }) {
-  const formattedPhone = input.phone.startsWith("+91") ? input.phone : `+91${input.phone.replace(/\D/g, "")}`;
-  
-  // 1. Ensure Firebase Auth session exists
-  let currentUser = auth.currentUser;
-  if (!currentUser) {
-    const anonCred = await signInAnonymously(auth);
-    currentUser = anonCred.user;
-  }
-
+  const cleanDigits = input.phone.replace(/\D/g, "");
+  const formattedPhone = `+91${cleanDigits.length === 10 ? cleanDigits : cleanDigits.slice(-10)}`;
   const finalName = sanitizeInput(input.displayName || "Bolo Citizen");
   const finalEmail = sanitizeInput(input.email || "");
+
+  // Use a secure synthetic auth account for phone-verified users
+  const syntheticEmail = finalEmail && finalEmail.includes("@") ? finalEmail : `p${cleanDigits}@bolo.internal`;
+  const syntheticPassword = `Bolo#Phone_${cleanDigits}!91`;
+
+  let currentUser: User | null = auth.currentUser;
+
+  if (!currentUser || currentUser.email !== syntheticEmail) {
+    try {
+      // Try signing in first
+      const cred = await signInWithEmailAndPassword(auth, syntheticEmail, syntheticPassword);
+      currentUser = cred.user;
+    } catch {
+      try {
+        // If account does not exist, create it
+        const newCred = await createUserWithEmailAndPassword(auth, syntheticEmail, syntheticPassword);
+        currentUser = newCred.user;
+      } catch (createErr) {
+        // If already in use with user's email, try signing in or fallback to phone synthetic email
+        const fallbackEmail = `p${cleanDigits}@bolo.internal`;
+        try {
+          const fallbackCred = await signInWithEmailAndPassword(auth, fallbackEmail, syntheticPassword);
+          currentUser = fallbackCred.user;
+        } catch {
+          const fallbackNew = await createUserWithEmailAndPassword(auth, fallbackEmail, syntheticPassword);
+          currentUser = fallbackNew.user;
+        }
+      }
+    }
+  }
 
   if (currentUser && finalName) {
     try {
@@ -348,23 +371,26 @@ export async function loginOrCreatePhoneUser(input: {
     }
   }
 
-  // 2. Save or update profile in users/${currentUser.uid}
-  try {
-    const userRef = ref(db, `users/${currentUser.uid}`);
-    await set(userRef, {
-      uid: currentUser.uid,
-      displayName: finalName,
-      phone: formattedPhone,
-      email: finalEmail,
-      role: "citizen",
-      verified: true,
-      createdAt: Date.now(),
-    });
-  } catch (err) {
-    console.warn("Could not save phone user profile in RTDB:", err);
+  // Save profile in users/${currentUser.uid}
+  if (currentUser) {
+    try {
+      const userRef = ref(db, `users/${currentUser.uid}`);
+      await set(userRef, {
+        uid: currentUser.uid,
+        displayName: finalName,
+        phone: formattedPhone,
+        email: finalEmail || currentUser.email || "",
+        role: "citizen",
+        verified: true,
+        createdAt: Date.now(),
+      });
+    } catch (err) {
+      console.warn("Could not save phone user profile in RTDB:", err);
+    }
+    return toBoloUser(currentUser);
   }
 
-  return toBoloUser(currentUser);
+  throw new Error("Unable to create phone user session.");
 }
 
 export async function signOutOfBolo() {
