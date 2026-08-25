@@ -79,9 +79,9 @@ const firebaseConfig = {
 
 export const isFirebaseConfigured = true;
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
+export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getDatabase(app);
 
 // ── Firebase Spark Tier Connection Optimizer (100 Concurrent Connections Cap) ──
 // Automatically releases WebSocket connection when tab is hidden or idle
