@@ -29,7 +29,7 @@ import { sendMsg91Otp, verifyMsg91Otp, resendMsg91Otp, validateIndianPhone } fro
 import { validateStrongPassword } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "Welcome to Bolo — Civic Connect" }] }),
+  head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
   component: AuthPage,
 });
 
@@ -168,8 +168,21 @@ function AuthPage() {
     try {
       const cleanPhone = phone.replace(/\D/g, "");
       await verifyMsg91Otp(cleanPhone, otpCode.trim());
-      // Step 1 requirement: After submit OTP, show create new profile form
-      setStep("profile");
+
+      // Check if user profile already exists
+      const existingUser = await checkUserExistsByPhone(`+91${cleanPhone}`);
+      if (existingUser && existingUser.displayName && existingUser.displayName !== "Bolo Citizen") {
+        // Existing user with complete profile -> sign in directly
+        await loginOrCreatePhoneUser({ phone: `+91${cleanPhone}` });
+        await navigate({ to: "/" });
+      } else {
+        // New user or incomplete profile -> show "Create Profile" form
+        if (existingUser) {
+          setName(existingUser.displayName || "");
+          setEmail(existingUser.email || "");
+        }
+        setStep("profile");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to verify OTP.");
     } finally {
@@ -316,24 +329,24 @@ function AuthPage() {
               {step === "profile"
                 ? "Complete your profile."
                 : step === "verify_otp"
-                ? "Verify phone OTP."
-                : mode === "signup"
-                ? "Join the change."
-                : mode === "phone"
-                ? "Phone quick login."
-                : "Welcome back."}
+                  ? "Verify phone OTP."
+                  : mode === "signup"
+                    ? "Join the change."
+                    : mode === "phone"
+                      ? "Phone quick login."
+                      : "Welcome back."}
             </h1>
 
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {step === "profile"
                 ? "Set up your civic identity. Your contact details remain private and safe."
                 : step === "verify_otp"
-                ? `Enter the verification code sent to +91 ${phone}.`
-                : mode === "signup"
-                ? "Create your Bolo account using email & password."
-                : mode === "phone"
-                ? "Fast sign in or register via instant SMS OTP."
-                : "Sign in to report issues and track resolutions in your area."}
+                  ? `Enter the verification code sent to +91 ${phone}.`
+                  : mode === "signup"
+                    ? "Create your Bolo account using email & password."
+                    : mode === "phone"
+                      ? "Fast sign in or register via instant SMS OTP."
+                      : "Sign in to report issues and track resolutions in your area."}
             </p>
 
             {/* Mode Selector Tabs (only shown on step 1) */}
@@ -344,9 +357,8 @@ function AuthPage() {
                   role="tab"
                   aria-selected={mode === "signup"}
                   onClick={() => resetAllStates("signup")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
-                    mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${mode === "signup" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Email
                 </button>
@@ -355,9 +367,8 @@ function AuthPage() {
                   role="tab"
                   aria-selected={mode === "phone"}
                   onClick={() => resetAllStates("phone")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
-                    mode === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${mode === "phone" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Phone OTP
                 </button>
@@ -366,9 +377,8 @@ function AuthPage() {
                   role="tab"
                   aria-selected={mode === "signin"}
                   onClick={() => resetAllStates("signin")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${
-                    mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`min-h-9 rounded-xl text-xs font-bold transition-all ${mode === "signin" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Sign in
                 </button>
@@ -402,7 +412,7 @@ function AuthPage() {
 
             {/* Main Dynamic Forms */}
             <form onSubmit={step === "verify_otp" ? handleVerifyPhoneOtp : submit} className="space-y-3" noValidate>
-              
+
               {/* ========================================================
                * FLOW 1: PHONE OTP FLOW
                * ======================================================== */}
@@ -775,9 +785,8 @@ function Field({
 function RequirementItem({ met, label }: { met: boolean; label: string }) {
   return (
     <div
-      className={`flex items-center gap-1 text-[10px] transition-colors ${
-        met ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80"
-      }`}
+      className={`flex items-center gap-1 text-[10px] transition-colors ${met ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80"
+        }`}
     >
       {met ? (
         <Check className="size-3 shrink-0 stroke-[3]" />
