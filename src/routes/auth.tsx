@@ -4,7 +4,6 @@ import {
   MapPin,
   Phone,
   Sparkles,
-  KeyRound,
   Check,
   CheckCircle2,
   Lock,
@@ -12,7 +11,8 @@ import {
   User as UserIcon,
   ArrowRight,
   RotateCw,
-  Edit3,
+  MailCheck,
+  ExternalLink,
 } from "lucide-react";
 
 import civicIllustration from "@/assets/bolo-auth-civic-india.png";
@@ -23,10 +23,11 @@ import {
   getFirebaseErrorMessage,
   signInToBolo,
   signInWithGoogle,
+  resendVerificationEmail,
+  checkEmailVerified,
 } from "@/lib/firebase";
 import { validateIndianPhone } from "@/lib/msg91";
 import { validateStrongPassword } from "@/lib/utils";
-import { sendEmailOtp, verifyEmailOtp, resendEmailOtp, isValidEmail } from "@/lib/email-otp";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 type Mode = "signup" | "signin";
-type OnboardingStep = "credentials" | "profile";
+type OnboardingStep = "credentials" | "profile" | "email_sent";
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -50,28 +51,26 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Email OTP States
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+  // Verification Email States
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [emailNotice, setEmailNotice] = useState<string | null>(null);
 
   // States
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated and completed
   useEffect(() => {
     if (user && step === "credentials") {
       void navigate({ to: "/" });
     }
   }, [user, step, navigate]);
 
-  // Resend Countdown Timer for Email OTP
+  // Resend Countdown Timer
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    if (otpSent && resendTimer > 0) {
+    if (step === "email_sent" && resendTimer > 0) {
       interval = setInterval(() => {
         setResendTimer((prev) => {
           if (prev <= 1) {
@@ -85,15 +84,13 @@ function AuthPage() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [otpSent, resendTimer]);
+  }, [step, resendTimer]);
 
   const resetAllStates = (newMode: Mode) => {
     setMode(newMode);
     setStep("credentials");
-    setOtpSent(false);
-    setOtpCode("");
-    setOtpMessage(null);
     setError(null);
+    setEmailNotice(null);
   };
 
   // Google OAuth Handler
@@ -115,81 +112,43 @@ function AuthPage() {
     }
   }
 
-  // 1. Send Email Verification OTP
-  async function handleSendEmailOtp() {
-    setError(null);
-    setOtpMessage(null);
-
-    const cleanEmail = email.trim();
-    if (!isValidEmail(cleanEmail)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
-    const pwdValidation = validateStrongPassword(password);
-    if (!pwdValidation.valid) {
-      setError(`Strong password required: ${pwdValidation.errors.join(", ")}.`);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    setPending(true);
-    try {
-      const res = await sendEmailOtp(cleanEmail);
-      setOtpSent(true);
-      setOtpMessage(res.message);
-      setResendTimer(30);
-      setCanResend(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send verification code.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // 2. Resend Email OTP
-  async function handleResendEmailOtp() {
+  // Resend Verification Email Link
+  async function handleResendVerificationLink() {
     if (!canResend || pending) return;
     setError(null);
     setPending(true);
     try {
-      const res = await resendEmailOtp(email.trim());
-      setOtpMessage(res.message);
+      await resendVerificationEmail();
+      setEmailNotice("New verification link sent. Please check your inbox.");
       setResendTimer(30);
       setCanResend(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resend verification code.");
+      setError(err instanceof Error ? err.message : "Failed to resend verification email.");
     } finally {
       setPending(false);
     }
   }
 
-  // 3. Verify Email OTP & Proceed to Profile Setup
-  async function handleVerifyEmailOtp(event?: FormEvent) {
-    if (event) event.preventDefault();
+  // Check if user clicked email verification link
+  async function handleCheckVerification() {
     setError(null);
-
-    if (otpCode.trim().length < 4) {
-      setError("Please enter the 6-digit verification code sent to your email.");
-      return;
-    }
-
     setPending(true);
     try {
-      await verifyEmailOtp(email.trim(), otpCode.trim());
-      setStep("profile");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid verification code.");
+      const isVerified = await checkEmailVerified();
+      if (isVerified) {
+        await navigate({ to: "/" });
+      } else {
+        setEmailNotice("We haven't received your email verification yet. Please click the link in your email, then try again.");
+      }
+    } catch {
+      // In case session reloaded, let them proceed
+      await navigate({ to: "/" });
     } finally {
       setPending(false);
     }
   }
 
-  // 4. Form Submit Dispatcher
+  // Form Submit Dispatcher
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -218,18 +177,24 @@ function AuthPage() {
       return;
     }
 
-    // --- Sign Up Step 1: Request Email OTP if not sent yet ---
+    // --- Sign Up Step 1: Credentials -> Go to Profile Step ---
     if (mode === "signup" && step === "credentials") {
-      if (!otpSent) {
-        await handleSendEmailOtp();
-        return;
-      } else {
-        await handleVerifyEmailOtp();
-        return;
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes("@")) {
+        return setError("Please enter a valid email address.");
       }
+      const pwdValidation = validateStrongPassword(password);
+      if (!pwdValidation.valid) {
+        return setError(`Strong password required: ${pwdValidation.errors.join(", ")}.`);
+      }
+      if (password !== confirmPassword) {
+        return setError("Passwords do not match.");
+      }
+      setStep("profile");
+      return;
     }
 
-    // --- Sign Up Step 2: Create Profile & Account ---
+    // --- Sign Up Step 2: Create Account & Send Verification Email ---
     if (mode === "signup" && step === "profile") {
       if (name.trim().length < 2) {
         return setError("Please enter your full name.");
@@ -248,7 +213,9 @@ function AuthPage() {
           email: email.trim(),
           password,
         });
-        await navigate({ to: "/" });
+        setStep("email_sent");
+        setResendTimer(30);
+        setCanResend(false);
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
       } finally {
@@ -295,21 +262,23 @@ function AuthPage() {
             <p className="text-xs font-bold tracking-wider text-primary uppercase">Civic connect</p>
 
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">
-              {step === "profile"
-                ? "Complete your profile."
-                : mode === "signup"
-                  ? otpSent ? "Verify your email." : "Join the change."
-                  : "Welcome back."}
+              {step === "email_sent"
+                ? "Check your inbox."
+                : step === "profile"
+                  ? "Complete your profile."
+                  : mode === "signup"
+                    ? "Join the change."
+                    : "Welcome back."}
             </h1>
 
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {step === "profile"
-                ? "Set up your civic identity. Your contact details remain private and safe."
-                : mode === "signup"
-                  ? otpSent
-                    ? `Enter the 6-digit verification code sent to ${email}.`
-                    : "Create your Bolo account using email & password with OTP verification."
-                  : "Sign in to report issues and track resolutions in your area."}
+              {step === "email_sent"
+                ? `We sent a verification link to ${email}.`
+                : step === "profile"
+                  ? "Set up your civic identity. Your contact details remain private and safe."
+                  : mode === "signup"
+                    ? "Create your Bolo account using email & password."
+                    : "Sign in to report issues and track resolutions in your area."}
             </p>
 
             {/* Mode Selector Tabs (only shown on step 1) */}
@@ -342,8 +311,8 @@ function AuthPage() {
               </div>
             )}
 
-            {/* Google OAuth (only on initial credentials step, hidden when OTP is active) */}
-            {step === "credentials" && !otpSent && (
+            {/* Google OAuth (only on initial credentials step) */}
+            {step === "credentials" && (
               <div className="mt-3">
                 <button
                   type="button"
@@ -367,39 +336,103 @@ function AuthPage() {
               </div>
             )}
 
-            {/* Main Dynamic Forms */}
-            <form onSubmit={submit} className="space-y-3" noValidate>
+            {/* ========================================================
+             * FLOW 3: VERIFICATION EMAIL SENT NOTICE SCREEN
+             * ======================================================== */}
+            {step === "email_sent" ? (
+              <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5 text-center">
+                  <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <MailCheck className="size-7 stroke-[2.2]" />
+                  </div>
+                  <h2 className="text-base font-bold text-foreground">Verification Link Sent</h2>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                    We have dispatched a verification link to:
+                  </p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-card px-3 py-1 text-xs font-bold text-primary shadow-xs">
+                    <Mail className="size-3.5" /> {email}
+                  </div>
+                  <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">
+                    Please click the link inside your email to activate your account. If you don't see it, check your spam or junk folder.
+                  </p>
+                </div>
 
-              {/* ========================================================
-               * FLOW 1: EMAIL SIGNUP (STEP 1: CREDENTIALS + INLINE OTP)
-               * ======================================================== */}
-              {mode === "signup" && step === "credentials" && (
-                <>
-                  <Field
-                    label="Email address"
-                    type="email"
-                    autoComplete="email"
-                    disabled={pending || otpSent}
-                    value={email}
-                    onChange={setEmail}
-                    placeholder="you@example.com"
-                    icon={<Mail className="size-4 text-muted-foreground" />}
-                    required
-                  />
+                {emailNotice && (
+                  <p className="rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                    {emailNotice}
+                  </p>
+                )}
 
-                  <div>
+                {error && (
+                  <p role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+                    {error}
+                  </p>
+                )}
+
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCheckVerification}
+                    disabled={pending}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                    {pending ? "Checking status..." : "I've Verified My Email"}
+                    {!pending && <ArrowRight className="size-4" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResendVerificationLink}
+                    disabled={pending || !canResend}
+                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-input bg-card px-4 text-xs font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RotateCw className="size-3.5" />
+                    {canResend ? "Resend Verification Link" : `Resend Link in ${resendTimer}s`}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => resetAllStates("signin")}
+                    className="inline-flex min-h-9 w-full items-center justify-center text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Main Dynamic Forms */
+              <form onSubmit={submit} className="space-y-3" noValidate>
+
+                {/* ========================================================
+                 * FLOW 1: EMAIL SIGNUP (STEP 1: CREDENTIALS)
+                 * ======================================================== */}
+                {mode === "signup" && step === "credentials" && (
+                  <>
                     <Field
-                      label="Create password"
-                      type="password"
-                      autoComplete="new-password"
-                      disabled={pending || otpSent}
-                      value={password}
-                      onChange={setPassword}
-                      placeholder="8+ characters (Aa, 1, #)"
-                      icon={<Lock className="size-4 text-muted-foreground" />}
+                      label="Email address"
+                      type="email"
+                      autoComplete="email"
+                      disabled={pending}
+                      value={email}
+                      onChange={setEmail}
+                      placeholder="you@example.com"
+                      icon={<Mail className="size-4 text-muted-foreground" />}
                       required
                     />
-                    {!otpSent && (
+
+                    <div>
+                      <Field
+                        label="Create password"
+                        type="password"
+                        autoComplete="new-password"
+                        disabled={pending}
+                        value={password}
+                        onChange={setPassword}
+                        placeholder="8+ characters (Aa, 1, #)"
+                        icon={<Lock className="size-4 text-muted-foreground" />}
+                        required
+                      />
                       <div className="mt-1.5 grid grid-cols-2 gap-1 sm:grid-cols-3">
                         <RequirementItem met={pwdValidation.hasMinLength} label="8+ characters" />
                         <RequirementItem met={pwdValidation.hasUpper} label="Uppercase (A-Z)" />
@@ -407,229 +440,155 @@ function AuthPage() {
                         <RequirementItem met={pwdValidation.hasNumber} label="Number (0-9)" />
                         <RequirementItem met={pwdValidation.hasSpecial} label="Special symbol" />
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  <Field
-                    label="Confirm password"
-                    type="password"
-                    autoComplete="new-password"
-                    disabled={pending || otpSent}
-                    value={confirmPassword}
-                    onChange={setConfirmPassword}
-                    placeholder="Repeat your password"
-                    icon={<Lock className="size-4 text-muted-foreground" />}
-                    required
-                  />
+                    <Field
+                      label="Confirm password"
+                      type="password"
+                      autoComplete="new-password"
+                      disabled={pending}
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      placeholder="Repeat your password"
+                      icon={<Lock className="size-4 text-muted-foreground" />}
+                      required
+                    />
+                  </>
+                )}
 
-                  {/* ── INLINE EMAIL OTP BOX (Appears below confirm password) ── */}
-                  {otpSent && (
-                    <div className="rounded-2xl border border-primary/30 bg-primary/5 p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <Mail className="size-3.5 text-primary" /> Enter Verification Code
-                        </span>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => {
-                            setOtpSent(false);
-                            setOtpCode("");
-                            setError(null);
-                          }}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline disabled:opacity-50"
-                        >
-                          <Edit3 className="size-3" /> Edit Email
-                        </button>
-                      </div>
+                {/* ========================================================
+                 * FLOW 2: SIGN IN FLOW
+                 * ======================================================== */}
+                {mode === "signin" && (
+                  <>
+                    <Field
+                      label="Email address"
+                      type="email"
+                      autoComplete="email"
+                      disabled={pending}
+                      value={email}
+                      onChange={setEmail}
+                      placeholder="you@example.com"
+                      icon={<Mail className="size-4 text-muted-foreground" />}
+                      required
+                    />
+                    <Field
+                      label="Password"
+                      type="password"
+                      autoComplete="current-password"
+                      disabled={pending}
+                      value={password}
+                      onChange={setPassword}
+                      placeholder="Your password"
+                      icon={<Lock className="size-4 text-muted-foreground" />}
+                      required
+                    />
+                  </>
+                )}
 
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        We sent a 6-digit verification code to <span className="font-semibold text-foreground">{email}</span>.
+                {/* ========================================================
+                 * STEP 2: CREATE PROFILE (BEFORE DISPATCHING VERIFICATION)
+                 * ======================================================== */}
+                {step === "profile" && (
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-foreground">
+                      <p className="font-bold flex items-center gap-1.5 text-primary">
+                        <CheckCircle2 className="size-4" />
+                        Credentials Confirmed
                       </p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        Enter your name and mobile number to complete your civic profile.
+                      </p>
+                    </div>
 
+                    {/* 1. Name Input */}
+                    <Field
+                      label="Your Full Name"
+                      type="text"
+                      autoComplete="name"
+                      autoFocus
+                      disabled={pending}
+                      value={name}
+                      onChange={setName}
+                      placeholder="e.g. Aditi Sharma"
+                      icon={<UserIcon className="size-4 text-primary" />}
+                      required
+                    />
+
+                    {/* 2. Optional Mobile Number */}
+                    <div>
+                      <label htmlFor="profile-phone" className="mb-1 block text-xs font-bold text-foreground">
+                        Mobile Number (Optional)
+                      </label>
                       <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
-                        <span className="flex items-center border-r border-input px-3 text-muted-foreground">
-                          <KeyRound className="size-4 text-primary" />
+                        <span className="flex items-center gap-1 border-r border-input px-3 text-xs font-bold text-foreground">
+                          <Phone className="size-3.5 text-primary" /> +91
                         </span>
                         <input
-                          id="email-otp-input"
-                          type="text"
+                          id="profile-phone"
+                          type="tel"
                           inputMode="numeric"
-                          maxLength={6}
-                          autoFocus
                           disabled={pending}
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                          placeholder="••••••"
-                          className="h-11 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 font-mono text-lg tracking-widest outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                          required
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                          placeholder="10-digit number"
+                          className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
                         />
                       </div>
+                    </div>
 
-                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-0.5">
-                        <span>Didn't receive code?</span>
-                        {canResend ? (
-                          <button
-                            type="button"
-                            onClick={handleResendEmailOtp}
-                            disabled={pending}
-                            className="inline-flex items-center gap-1 font-bold text-primary hover:underline disabled:opacity-50"
-                          >
-                            <RotateCw className="size-3" /> Resend Code
-                          </button>
-                        ) : (
-                          <span>Resend in {resendTimer}s</span>
-                        )}
+                    {/* 3. Verified Email Preview */}
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-foreground">Email Address</label>
+                      <div className="flex items-center justify-between rounded-2xl border border-input bg-secondary/50 px-3 py-2 text-sm">
+                        <span className="font-semibold text-foreground flex items-center gap-2">
+                          <Mail className="size-4 text-primary" /> {email}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                          <Check className="size-3" /> Ready
+                        </span>
                       </div>
                     </div>
-                  )}
-                </>
-              )}
-
-              {/* ========================================================
-               * FLOW 2: SIGN IN FLOW
-               * ======================================================== */}
-              {mode === "signin" && (
-                <>
-                  <Field
-                    label="Email address"
-                    type="email"
-                    autoComplete="email"
-                    disabled={pending}
-                    value={email}
-                    onChange={setEmail}
-                    placeholder="you@example.com"
-                    icon={<Mail className="size-4 text-muted-foreground" />}
-                    required
-                  />
-                  <Field
-                    label="Password"
-                    type="password"
-                    autoComplete="current-password"
-                    disabled={pending}
-                    value={password}
-                    onChange={setPassword}
-                    placeholder="Your password"
-                    icon={<Lock className="size-4 text-muted-foreground" />}
-                    required
-                  />
-                </>
-              )}
-
-              {/* ========================================================
-               * STEP 2: CREATE NEW PROFILE (AFTER EMAIL VERIFIED)
-               * ======================================================== */}
-              {step === "profile" && (
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-foreground">
-                    <p className="font-bold flex items-center gap-1.5 text-primary">
-                      <CheckCircle2 className="size-4" />
-                      Email Verified Successfully
-                    </p>
-                    <p className="mt-0.5 text-muted-foreground">
-                      Enter your name and mobile number to complete your civic profile.
-                    </p>
                   </div>
+                )}
 
-                  {/* 1. Name Input */}
-                  <Field
-                    label="Your Full Name"
-                    type="text"
-                    autoComplete="name"
-                    autoFocus
+                {/* Error Box */}
+                {error && (
+                  <p role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+                    {error}
+                  </p>
+                )}
+
+                {/* Action Buttons */}
+                {mode === "signup" && step === "credentials" ? (
+                  <button
+                    type="submit"
+                    disabled={pending || !email || !password || password !== confirmPassword}
+                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    Next: Complete Profile <ArrowRight className="size-4" />
+                  </button>
+                ) : step === "profile" ? (
+                  <button
+                    type="submit"
+                    disabled={pending || name.trim().length < 2}
+                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                    {pending ? "Creating Account..." : "Create Account & Send Verification Link"}
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
                     disabled={pending}
-                    value={name}
-                    onChange={setName}
-                    placeholder="e.g. Aditi Sharma"
-                    icon={<UserIcon className="size-4 text-primary" />}
-                    required
-                  />
-
-                  {/* 2. Optional Mobile Number */}
-                  <div>
-                    <label htmlFor="profile-phone" className="mb-1 block text-xs font-bold text-foreground">
-                      Mobile Number (Optional)
-                    </label>
-                    <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
-                      <span className="flex items-center gap-1 border-r border-input px-3 text-xs font-bold text-foreground">
-                        <Phone className="size-3.5 text-primary" /> +91
-                      </span>
-                      <input
-                        id="profile-phone"
-                        type="tel"
-                        inputMode="numeric"
-                        disabled={pending}
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="10-digit number"
-                        className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 3. Verified Email Preview */}
-                  <div>
-                    <label className="mb-1 block text-xs font-bold text-foreground">Email Address</label>
-                    <div className="flex items-center justify-between rounded-2xl border border-input bg-secondary/50 px-3 py-2 text-sm">
-                      <span className="font-semibold text-foreground flex items-center gap-2">
-                        <Mail className="size-4 text-primary" /> {email}
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                        <Check className="size-3" /> Verified
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Error Box */}
-              {error && (
-                <p role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-                  {error}
-                </p>
-              )}
-
-              {/* Action Buttons */}
-              {mode === "signup" && step === "credentials" && !otpSent ? (
-                <button
-                  type="submit"
-                  disabled={pending || !email || !password || password !== confirmPassword}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                  {pending ? "Sending Code..." : "Send Verification Code"}
-                  {!pending && <ArrowRight className="size-4" />}
-                </button>
-              ) : mode === "signup" && step === "credentials" && otpSent ? (
-                <button
-                  type="submit"
-                  disabled={pending || otpCode.trim().length < 4}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                  {pending ? "Verifying..." : "Verify OTP & Proceed to Profile"}
-                  {!pending && <ArrowRight className="size-4" />}
-                </button>
-              ) : step === "profile" ? (
-                <button
-                  type="submit"
-                  disabled={pending || name.trim().length < 2}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                  {pending ? "Saving Profile..." : "Complete Profile & Enter Bolo"}
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                  {pending ? "Signing in..." : "Sign in to Bolo"}
-                </button>
-              )}
-            </form>
+                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                    {pending ? "Signing in..." : "Sign in to Bolo"}
+                  </button>
+                )}
+              </form>
+            )}
           </div>
 
           {/* Footer badge */}

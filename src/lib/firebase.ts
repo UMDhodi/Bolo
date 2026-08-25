@@ -12,6 +12,7 @@ import {
   signInAnonymously,
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  sendEmailVerification,
   type ConfirmationResult,
   type User,
 } from "firebase/auth";
@@ -218,6 +219,14 @@ export async function createBoloAccount(input: {
 
   if (credential && credential.user) {
     await updateProfile(credential.user, { displayName: input.displayName });
+
+    // Send native Firebase email verification link
+    try {
+      await sendEmailVerification(credential.user);
+    } catch (mailErr) {
+      console.warn("Could not send email verification link:", mailErr);
+    }
+
     try {
       await set(ref(db, `users/${credential.user.uid}`), {
         uid: credential.user.uid,
@@ -226,7 +235,7 @@ export async function createBoloAccount(input: {
         email: cleanEmail,
         password: hashedPassword,
         role: "citizen",
-        verified: true,
+        verified: false,
         createdAt: Date.now(),
       });
     } catch (dbErr) {
@@ -236,6 +245,22 @@ export async function createBoloAccount(input: {
   }
 
   throw new Error("Unable to create account.");
+}
+
+export async function resendVerificationEmail(): Promise<void> {
+  if (auth.currentUser) {
+    await sendEmailVerification(auth.currentUser);
+  } else {
+    throw new Error("No active account session found. Please sign in to request a verification email.");
+  }
+}
+
+export async function checkEmailVerified(): Promise<boolean> {
+  if (auth.currentUser) {
+    await auth.currentUser.reload();
+    return auth.currentUser.emailVerified;
+  }
+  return false;
 }
 
 export async function signInToBolo(email: string, password: string) {
