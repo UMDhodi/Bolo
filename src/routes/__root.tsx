@@ -126,6 +126,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
+    scripts: [
+      {
+        src: "https://verify.msg91.com/otp-provider.js",
+        async: true,
+      },
+    ],
   }),
 
   shellComponent: RootShell,

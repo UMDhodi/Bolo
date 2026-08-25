@@ -26,7 +26,7 @@ import {
   checkUserExistsByPhone,
   loginOrCreatePhoneUser,
 } from "@/lib/firebase";
-import { sendMsg91Otp, verifyMsg91Otp, resendMsg91Otp, validateIndianPhone } from "@/lib/msg91";
+import { sendMsg91Otp, verifyMsg91Otp, resendMsg91Otp, validateIndianPhone, ensureMsg91Sdk } from "@/lib/msg91";
 import { validateStrongPassword } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
@@ -60,6 +60,11 @@ function AuthPage() {
   // States
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  // Initialize MSG91 SDK on page mount
+  useEffect(() => {
+    void ensureMsg91Sdk();
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {

@@ -102,11 +102,11 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
     process.env["MSG91_AUTH_KEY"] ||
     process.env["VITE_MSG91_TOKEN_AUTH"] ||
     process.env["MSG91_TOKEN_AUTH"] ||
-    "";
+    "564040TqZHyvJa6a8d61b6P1";
   const widgetId =
     process.env["VITE_MSG91_WIDGET_ID"] ||
     process.env["MSG91_WIDGET_ID"] ||
-    "";
+    "366879665345393532363737";
   const templateId =
     process.env["VITE_MSG91_TEMPLATE_ID"] ||
     process.env["MSG91_TEMPLATE_ID"] ||
