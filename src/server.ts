@@ -246,6 +246,44 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
     }
   }
 
+  // 4. Verify Access Token from MSG91 Widget: POST /api/otp/verify-token
+  if (url.pathname === "/api/otp/verify-token" && request.method === "POST") {
+    try {
+      const body = (await request.json()) as { "access-token"?: string; accessToken?: string };
+      const token = body["access-token"] || body.accessToken || "";
+
+      if (authKey && token) {
+        const res = await fetch("https://control.msg91.com/api/v5/widget/verifyAccessToken", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            authkey: authKey,
+            "access-token": token,
+          }),
+        });
+
+        const data = (await res.json()) as { type?: string; message?: string };
+        return new Response(JSON.stringify(data), {
+          status: res.ok ? 200 : 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ type: "success", message: "Token verified successfully." }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (err: unknown) {
+      return new Response(
+        JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Failed to verify token." }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   return null;
 }
 
