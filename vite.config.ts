@@ -14,7 +14,10 @@ export default defineConfig({
   },
   // Hard-pin to Vercel preset so Nitro generates the correct serverless function
   // output (.vercel/output) instead of the default cloudflare-module layout.
+  // inlineDynamicImports bundles all server code into a single file to prevent __exportAll ESM split errors.
   nitro: {
     preset: "vercel",
+    // @ts-expect-error nitro extra option
+    inlineDynamicImports: true,
   },
 });
