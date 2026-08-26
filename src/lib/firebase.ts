@@ -191,12 +191,11 @@ function message(error: unknown) {
   return error.message.replace("Firebase: ", "");
 }
 
-const ACTION_CODE_SETTINGS = {
-  url: "https://bolo-three.vercel.app/",
-  handleCodeInApp: false,
-};
-
-export async function initiateSignupAndSendVerification(email: string, password: string) {
+/**
+ * directSignUp: Creates a Firebase Auth account and immediately saves the user record
+ * to Realtime Database. No email verification step — user goes straight to home.
+ */
+export async function directSignUp(email: string, password: string): Promise<BoloUser> {
   const pwdValidation = validateStrongPassword(password);
   if (!pwdValidation.valid) {
     throw new Error(`Password security requirements not met: ${pwdValidation.errors.join(", ")}.`);
@@ -210,7 +209,7 @@ export async function initiateSignupAndSendVerification(email: string, password:
   } catch (err: unknown) {
     const errStr = String(err);
     if (errStr.includes("email-already-in-use")) {
-      // Sign in to get the credential, then re-send verification if not yet verified
+      // Already registered — sign them in
       credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
     } else {
       throw err;
@@ -218,29 +217,32 @@ export async function initiateSignupAndSendVerification(email: string, password:
   }
 
   if (credential && credential.user) {
-    // 1. Send Firebase email verification link with ActionCodeSettings
+    const uid = credential.user.uid;
+    // Use the part before @ as default display name
+    const defaultName = cleanEmail.split("@")[0] ?? "Bolo Citizen";
+
+    // Set displayName in Firebase Auth
     try {
-      await sendEmailVerification(credential.user, ACTION_CODE_SETTINGS);
-    } catch (mailErr) {
-      console.warn("Could not send email verification link:", mailErr);
-      throw new Error("Failed to send verification email. Please try again.");
+      await updateProfile(credential.user, { displayName: defaultName });
+    } catch {
+      // non-fatal
     }
 
-    // 2. Persist minimal initial record in RTDB — no password stored here
+    // Save to Realtime Database — no password stored
     try {
-      const userRef = ref(db, `users/${credential.user.uid}`);
+      const userRef = ref(db, `users/${uid}`);
       const snap = await get(userRef);
       const existing = snap.exists() ? (snap.val() as Record<string, unknown>) : {};
       await set(userRef, {
-        uid: credential.user.uid,
+        uid,
         email: cleanEmail,
+        displayName: (existing["displayName"] as string) || defaultName,
+        phone: (existing["phone"] as string) || "",
         role: (existing["role"] as string) || "citizen",
         createdAt: (existing["createdAt"] as number) || Date.now(),
-        displayName: (existing["displayName"] as string) || "",
-        phone: (existing["phone"] as string) || "",
       });
     } catch (dbErr) {
-      console.warn("Could not save initial user record to Realtime Database:", dbErr);
+      console.warn("Could not save user record to Realtime Database:", dbErr);
     }
 
     return toBoloUser(credential.user);
@@ -248,6 +250,7 @@ export async function initiateSignupAndSendVerification(email: string, password:
 
   throw new Error("Unable to create account.");
 }
+
 
 export async function saveCitizenProfile(input: {
   uid: string;

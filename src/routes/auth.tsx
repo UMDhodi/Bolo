@@ -2,16 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, type FormEvent } from "react";
 import {
   MapPin,
-  Phone,
   Sparkles,
   Check,
-  CheckCircle2,
   Lock,
   Mail,
-  User as UserIcon,
   ArrowRight,
-  RotateCw,
   KeyRound,
+  RotateCw,
   ShieldCheck,
 } from "lucide-react";
 
@@ -19,17 +16,13 @@ import civicIllustration from "@/assets/bolo-auth-civic-india.png";
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import {
-  initiateSignupAndSendVerification,
-  saveCitizenProfile,
+  directSignUp,
   getFirebaseErrorMessage,
   signInToBolo,
   signInWithGoogle,
-  resendVerificationEmail,
-  checkEmailVerified,
   sendPasswordResetLink,
   auth,
 } from "@/lib/firebase";
-import { validateIndianPhone } from "@/lib/msg91";
 import { validateStrongPassword, validateEmailDomain } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
@@ -38,54 +31,42 @@ export const Route = createFileRoute("/auth")({
 });
 
 type Mode = "signup" | "signin" | "forgot_password";
-type OnboardingStep = "credentials" | "awaiting_verification" | "profile";
 
 function AuthPage() {
   const navigate = useNavigate();
   const { user, configured } = useAuth();
 
   const [mode, setMode] = useState<Mode>("signup");
-  const [step, setStep] = useState<OnboardingStep>("credentials");
 
   // Form Fields
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Verification & Reset States
+  // Password Reset States
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
 
-  // Inline email field domain error (shown below the email input, not in the general error box)
+  // Inline email domain error
   const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
 
-  // States
+  // General state
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Redirect if already authenticated, email is verified, and profile is complete
+  // Redirect already-authenticated users to home
   useEffect(() => {
-    if (
-      user &&
-      step === "credentials" &&
-      mode === "signup" &&
-      user.emailVerified &&
-      user.displayName &&
-      user.displayName !== "Bolo citizen"
-    ) {
+    if (user) {
       void navigate({ to: "/" });
     }
-    // For signin mode, user is explicitly navigated after signInToBolo succeeds
-  }, [user, step, mode, navigate]);
+  }, [user, navigate]);
 
-  // Resend Countdown Timer
+  // Resend countdown timer (for forgot-password flow)
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    if ((step === "awaiting_verification" || resetSent) && resendTimer > 0) {
+    if (resetSent && resendTimer > 0) {
       interval = setInterval(() => {
         setResendTimer((prev) => {
           if (prev <= 1) {
@@ -99,42 +80,17 @@ function AuthPage() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [step, resetSent, resendTimer]);
-
-  // Real-Time Email Verification Polling (automatically proceeds to profile setup upon link click)
-  useEffect(() => {
-    let checkInterval: NodeJS.Timeout | null = null;
-
-    if (step === "awaiting_verification") {
-      checkInterval = setInterval(async () => {
-        try {
-          if (auth.currentUser) {
-            await auth.currentUser.reload();
-            if (auth.currentUser.emailVerified) {
-              setStep("profile");
-            }
-          }
-        } catch {
-          // ignore network hiccups
-        }
-      }, 2000);
-    }
-
-    return () => {
-      if (checkInterval) clearInterval(checkInterval);
-    };
-  }, [step]);
+  }, [resetSent, resendTimer]);
 
   const resetAllStates = (newMode: Mode) => {
     setMode(newMode);
-    setStep("credentials");
     setError(null);
     setEmailNotice(null);
     setResetSent(false);
     setEmailFieldError(null);
   };
 
-  // Google OAuth Handler
+  // Google OAuth
   async function handleGoogleAuth() {
     setError(null);
     setPending(true);
@@ -153,24 +109,7 @@ function AuthPage() {
     }
   }
 
-  // Resend Verification Email Link
-  async function handleResendVerificationLink() {
-    if (!canResend || pending) return;
-    setError(null);
-    setPending(true);
-    try {
-      await resendVerificationEmail();
-      setEmailNotice("New verification link sent! Please check your inbox or spam folder.");
-      setResendTimer(30);
-      setCanResend(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resend verification email.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // Resend Password Reset Link
+  // Resend password reset link
   async function handleResendPasswordReset() {
     if (!canResend || pending) return;
     setError(null);
@@ -187,34 +126,7 @@ function AuthPage() {
     }
   }
 
-  // Manual Check if user clicked email verification link
-  async function handleManualCheckVerification() {
-    setError(null);
-    setPending(true);
-    try {
-      if (!auth.currentUser) {
-        setError("No active session found. Please go back and sign up again.");
-        return;
-      }
-      await auth.currentUser.reload();
-      const isVerified = auth.currentUser.emailVerified;
-      if (isVerified) {
-        setStep("profile");
-      } else {
-        setEmailNotice("Your email has not been verified yet. Please open the link in your inbox (check spam too), then click here again.");
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message.replace("Firebase: ", "")
-          : "Failed to check verification status. Please try again."
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // Form Submit Dispatcher
+  // Form submit dispatcher
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -224,7 +136,7 @@ function AuthPage() {
       return;
     }
 
-    // --- Forgot Password Flow ---
+    // ── Forgot Password ──
     if (mode === "forgot_password") {
       const cleanEmail = email.trim().toLowerCase();
       const domainCheck = validateEmailDomain(cleanEmail);
@@ -246,7 +158,7 @@ function AuthPage() {
       return;
     }
 
-    // --- Sign In Flow ---
+    // ── Sign In ──
     if (mode === "signin") {
       setPending(true);
       try {
@@ -265,11 +177,11 @@ function AuthPage() {
       return;
     }
 
-    // --- Sign Up Step 1: Validate Domain & Password -> Dispatch Verification Link ---
-    if (mode === "signup" && step === "credentials") {
+    // ── Sign Up: validate → create account → save RTDB → redirect home ──
+    if (mode === "signup") {
       const cleanEmail = email.trim().toLowerCase();
 
-      // 1. Strict email domain validation (Google, Outlook, Yahoo, etc. & block fake domains)
+      // 1. Email domain validation
       const domainCheck = validateEmailDomain(cleanEmail);
       if (!domainCheck.valid) {
         setEmailFieldError(domainCheck.error || "Please use a valid email provider (Gmail, Outlook, Yahoo, iCloud, etc.).");
@@ -277,61 +189,27 @@ function AuthPage() {
       }
       setEmailFieldError(null);
 
-      // 2. Strong password validation
+      // 2. Password strength
       const pwdValidation = validateStrongPassword(password);
       if (!pwdValidation.valid) {
         return setError(`Strong password required: ${pwdValidation.errors.join(", ")}.`);
       }
 
-      // 3. Password confirmation match
+      // 3. Password match
       if (password !== confirmPassword) {
         return setError("Passwords do not match.");
       }
 
       setPending(true);
       try {
-        await initiateSignupAndSendVerification(cleanEmail, password);
-        setStep("awaiting_verification");
-        setResendTimer(30);
-        setCanResend(false);
-      } catch (nextError) {
-        setError(getFirebaseErrorMessage(nextError));
-      } finally {
-        setPending(false);
-      }
-      return;
-    }
-
-    // --- Sign Up Step 2: Save Profile to Realtime Database & Auth ---
-    if (mode === "signup" && step === "profile") {
-      if (name.trim().length < 2) {
-        return setError("Please enter your full name.");
-      }
-      const cleanPhone = phone.replace(/\D/g, "");
-      if (cleanPhone && !validateIndianPhone(cleanPhone)) {
-        return setError("Please enter a valid 10-digit Indian mobile number.");
-      }
-
-      setPending(true);
-      try {
-        const uid = auth.currentUser?.uid;
-        if (!uid) {
-          throw new Error("No active session found. Please sign in.");
-        }
-
-        const formattedPhone = cleanPhone ? `+91${cleanPhone}` : "";
-        
-        // Save to Realtime Database and update Auth profile
-        await saveCitizenProfile({
-          uid,
-          displayName: name.trim(),
-          legalName: name.trim(),
-          phone: formattedPhone,
-          email: email.trim() || auth.currentUser?.email || "",
-        });
-
+        await directSignUp(cleanEmail, password);
         await navigate({ to: "/" });
       } catch (nextError) {
+        const errStr = (nextError instanceof Error ? nextError.message : String(nextError)).toLowerCase();
+        if (errStr.includes("quota-exceeded") || errStr.includes("quota")) {
+          void navigate({ to: "/waitlist" });
+          return;
+        }
         setError(getFirebaseErrorMessage(nextError));
       } finally {
         setPending(false);
@@ -379,29 +257,21 @@ function AuthPage() {
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">
               {mode === "forgot_password"
                 ? "Reset your password."
-                : step === "awaiting_verification"
-                  ? "Verify your email."
-                  : step === "profile"
-                    ? "Complete your profile."
-                    : mode === "signup"
-                      ? "Join the change."
-                      : "Welcome back."}
+                : mode === "signup"
+                  ? "Join the change."
+                  : "Welcome back."}
             </h1>
 
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {mode === "forgot_password"
                 ? "Enter your registered email and we'll send you a password reset link."
-                : step === "awaiting_verification"
-                  ? "We dispatched a verification link to your registered email."
-                  : step === "profile"
-                    ? "Set up your civic identity. Your details are saved securely in your profile."
-                    : mode === "signup"
-                      ? "Create your account with your genuine email (Gmail, Outlook, Yahoo, etc.)."
-                      : "Sign in to report issues and track resolutions in your area."}
+                : mode === "signup"
+                  ? "Create your account with your genuine email (Gmail, Outlook, Yahoo, etc.)."
+                  : "Sign in to report issues and track resolutions in your area."}
             </p>
 
-            {/* Mode Selector Tabs (only shown on step 1 and when not in forgot password) */}
-            {step === "credentials" && mode !== "forgot_password" && (
+            {/* Mode Selector Tabs */}
+            {mode !== "forgot_password" && (
               <div className="mt-3 grid grid-cols-2 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
                 <button
                   type="button"
@@ -430,8 +300,8 @@ function AuthPage() {
               </div>
             )}
 
-            {/* Google OAuth (only on initial credentials step, not forgot password) */}
-            {step === "credentials" && mode !== "forgot_password" && (
+            {/* Google OAuth */}
+            {mode !== "forgot_password" && (
               <div className="mt-3">
                 <button
                   type="button"
@@ -455,85 +325,8 @@ function AuthPage() {
               </div>
             )}
 
-            {/* ========================================================
-             * FLOW 2: REAL-TIME VERIFICATION LOADING SCREEN
-             * ======================================================== */}
-            {step === "awaiting_verification" ? (
-              <div className="space-y-4 pt-2 text-center animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="rounded-3xl border border-primary/25 bg-primary/5 p-6 flex flex-col items-center">
-                  {/* User's Custom Animated Loading Spinner */}
-                  <div className="mb-4 flex items-center justify-center p-3.5 rounded-full bg-card shadow-soft border border-primary/20">
-                    <BSpinnerToCheck size={64} color="#059669" bg="#ffffff" />
-                  </div>
-
-                  <h2 className="font-display text-xl font-bold text-foreground">
-                    Go check your mailbox & verify the link
-                  </h2>
-
-                  <p className="mt-2 text-xs text-muted-foreground leading-relaxed max-w-sm">
-                    We sent a verification link to:
-                  </p>
-
-                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-card px-3.5 py-1 text-xs font-bold text-primary shadow-xs">
-                    <Mail className="size-3.5" /> {email}
-                  </div>
-
-                  <div className="mt-3.5 flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded-full px-3 py-1">
-                    <span className="relative flex size-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full size-2 bg-emerald-500"></span>
-                    </span>
-                    Listening for email verification in real-time...
-                  </div>
-                </div>
-
-                {emailNotice && (
-                  <p className="rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
-                    {emailNotice}
-                  </p>
-                )}
-
-                {error && (
-                  <p role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-                    {error}
-                  </p>
-                )}
-
-                <div className="space-y-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleManualCheckVerification}
-                    disabled={pending}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                    {pending ? "Checking link status..." : "I've Clicked the Verification Link"}
-                    {!pending && <ArrowRight className="size-4" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleResendVerificationLink}
-                    disabled={pending || !canResend}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-input bg-card px-4 text-xs font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RotateCw className="size-3.5" />
-                    {canResend ? "Resend Verification Link" : `Resend Link in ${resendTimer}s`}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => resetAllStates("signin")}
-                    className="inline-flex min-h-9 w-full items-center justify-center text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  >
-                    Back to Sign In
-                  </button>
-                </div>
-              </div>
-            ) : mode === "forgot_password" ? (
-              /* ========================================================
-               * FLOW 3: FORGOT PASSWORD RESET FLOW
-               * ======================================================== */
+            {/* ── Forgot Password Flow ── */}
+            {mode === "forgot_password" ? (
               <div className="space-y-3 pt-1">
                 {resetSent ? (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -620,68 +413,64 @@ function AuthPage() {
                 )}
               </div>
             ) : (
-              /* Main Dynamic Forms */
-              <form onSubmit={submit} className="space-y-3" noValidate>
+              /* ── Main Sign Up / Sign In Forms ── */
+              <form onSubmit={submit} className="space-y-3 pt-1" noValidate>
 
-                {/* ========================================================
-                 * FLOW 1: EMAIL SIGNUP (STEP 1: CREDENTIALS)
-                 * ======================================================== */}
-                {mode === "signup" && step === "credentials" && (
+                {/* ── Sign Up Form ── */}
+                {mode === "signup" && (
                   <>
+                    {/* Email with inline domain validation */}
                     <div>
-                      <div>
-                        <label
-                          htmlFor="email-address-(google,-outlook,-yahoo,-etc.)"
-                          className="mb-1 block text-xs font-bold text-foreground"
-                        >
-                          Email address (Google, Outlook, Yahoo, etc.)
-                        </label>
-                        <div
-                          className={`flex items-center rounded-2xl border bg-card focus-within:ring-2 focus-within:ring-ring ${
-                            emailFieldError
-                              ? "border-destructive focus-within:ring-destructive"
-                              : "border-input"
-                          }`}
-                        >
-                          <span className="flex items-center pl-3 text-muted-foreground">
-                            <Mail className={`size-4 ${emailFieldError ? "text-destructive" : "text-muted-foreground"}`} />
-                          </span>
-                          <input
-                            id="email-address-(google,-outlook,-yahoo,-etc.)"
-                            type="email"
-                            autoComplete="email"
-                            disabled={pending}
-                            value={email}
-                            onChange={(e) => {
-                              setEmail(e.target.value);
-                              // Clear field error as user types
-                              if (emailFieldError) setEmailFieldError(null);
-                            }}
-                            onBlur={() => {
-                              const cleanEmail = email.trim().toLowerCase();
-                              if (cleanEmail) {
-                                const check = validateEmailDomain(cleanEmail);
-                                setEmailFieldError(check.valid ? null : (check.error ?? null));
-                              }
-                            }}
-                            placeholder="you@gmail.com"
-                            className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                            required
-                          />
-                        </div>
-                        {emailFieldError && (
-                          <p role="alert" className="mt-1 text-[11px] font-medium text-destructive">
-                            {emailFieldError}
-                          </p>
-                        )}
-                        {!emailFieldError && (
-                          <p className="mt-1 text-[10px] text-muted-foreground flex items-center gap-1">
-                            <ShieldCheck className="size-3 text-primary" /> Supported: Gmail, Outlook, Yahoo, iCloud, Proton, etc.
-                          </p>
-                        )}
+                      <label
+                        htmlFor="signup-email"
+                        className="mb-1 block text-xs font-bold text-foreground"
+                      >
+                        Email address (Google, Outlook, Yahoo, etc.)
+                      </label>
+                      <div
+                        className={`flex items-center rounded-2xl border bg-card focus-within:ring-2 focus-within:ring-ring ${
+                          emailFieldError
+                            ? "border-destructive focus-within:ring-destructive"
+                            : "border-input"
+                        }`}
+                      >
+                        <span className="flex items-center pl-3">
+                          <Mail className={`size-4 ${emailFieldError ? "text-destructive" : "text-muted-foreground"}`} />
+                        </span>
+                        <input
+                          id="signup-email"
+                          type="email"
+                          autoComplete="email"
+                          disabled={pending}
+                          value={email}
+                          onChange={(e) => {
+                            setEmail(e.target.value);
+                            if (emailFieldError) setEmailFieldError(null);
+                          }}
+                          onBlur={() => {
+                            const clean = email.trim().toLowerCase();
+                            if (clean) {
+                              const check = validateEmailDomain(clean);
+                              setEmailFieldError(check.valid ? null : (check.error ?? null));
+                            }
+                          }}
+                          placeholder="you@gmail.com"
+                          className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                          required
+                        />
                       </div>
+                      {emailFieldError ? (
+                        <p role="alert" className="mt-1 text-[11px] font-medium text-destructive">
+                          {emailFieldError}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[10px] text-muted-foreground flex items-center gap-1">
+                          <ShieldCheck className="size-3 text-primary" /> Supported: Gmail, Outlook, Yahoo, iCloud, Proton, etc.
+                        </p>
+                      )}
                     </div>
 
+                    {/* Password with strength indicators */}
                     <div>
                       <Field
                         label="Create password"
@@ -717,9 +506,7 @@ function AuthPage() {
                   </>
                 )}
 
-                {/* ========================================================
-                 * FLOW 4: SIGN IN FLOW
-                 * ======================================================== */}
+                {/* ── Sign In Form ── */}
                 {mode === "signin" && (
                   <>
                     <Field
@@ -736,7 +523,7 @@ function AuthPage() {
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label htmlFor="password" className="text-xs font-bold text-foreground">
+                        <label htmlFor="signin-password" className="text-xs font-bold text-foreground">
                           Password
                         </label>
                         <button
@@ -754,10 +541,10 @@ function AuthPage() {
                       </div>
                       <div className={`flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
                         <span className="flex items-center pl-3 text-muted-foreground">
-                          <Lock className="size-4 text-muted-foreground" />
+                          <Lock className="size-4" />
                         </span>
                         <input
-                          id="password"
+                          id="signin-password"
                           type="password"
                           autoComplete="current-password"
                           disabled={pending}
@@ -772,72 +559,6 @@ function AuthPage() {
                   </>
                 )}
 
-                {/* ========================================================
-                 * STEP 3: CREATE CITIZEN PROFILE (AFTER EMAIL IS VERIFIED)
-                 * ======================================================== */}
-                {step === "profile" && (
-                  <div className="space-y-3">
-                    <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs leading-relaxed text-foreground">
-                      <p className="font-bold flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="size-4" />
-                        Email Verified Successfully!
-                      </p>
-                      <p className="mt-0.5 text-muted-foreground">
-                        Enter your legal name and mobile number to complete and activate your civic profile.
-                      </p>
-                    </div>
-
-                    {/* 1. Name Input */}
-                    <Field
-                      label="Your Full Name"
-                      type="text"
-                      autoComplete="name"
-                      autoFocus
-                      disabled={pending}
-                      value={name}
-                      onChange={setName}
-                      placeholder="e.g. Aditi Sharma"
-                      icon={<UserIcon className="size-4 text-primary" />}
-                      required
-                    />
-
-                    {/* 2. Optional Mobile Number */}
-                    <div>
-                      <label htmlFor="profile-phone" className="mb-1 block text-xs font-bold text-foreground">
-                        Mobile Number (Optional)
-                      </label>
-                      <div className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
-                        <span className="flex items-center gap-1 border-r border-input px-3 text-xs font-bold text-foreground">
-                          <Phone className="size-3.5 text-primary" /> +91
-                        </span>
-                        <input
-                          id="profile-phone"
-                          type="tel"
-                          inputMode="numeric"
-                          disabled={pending}
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                          placeholder="10-digit number"
-                          className="h-10 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-
-                    {/* 3. Verified Email Preview */}
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-foreground">Verified Email</label>
-                      <div className="flex items-center justify-between rounded-2xl border border-input bg-secondary/50 px-3 py-2 text-sm">
-                        <span className="font-semibold text-foreground flex items-center gap-2">
-                          <Mail className="size-4 text-primary" /> {email || auth.currentUser?.email}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          <Check className="size-3" /> Verified
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Error Box */}
                 {error && (
                   <p role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
@@ -845,36 +566,23 @@ function AuthPage() {
                   </p>
                 )}
 
-                {/* Action Buttons */}
-                {mode === "signup" && step === "credentials" ? (
-                  <button
-                    type="submit"
-                    disabled={pending || !email || !password || password !== confirmPassword || !!emailFieldError}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                    {pending ? "Sending Verification Link..." : "Verify"}
-                    {!pending && <ArrowRight className="size-4" />}
-                  </button>
-                ) : step === "profile" ? (
-                  <button
-                    type="submit"
-                    disabled={pending || name.trim().length < 2}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                    {pending ? "Saving Profile..." : "Create Account"}
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={pending}
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                    {pending ? "Signing in..." : "Sign in to Bolo"}
-                  </button>
-                )}
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={
+                    pending ||
+                    !email ||
+                    !password ||
+                    (mode === "signup" && (password !== confirmPassword || !!emailFieldError))
+                  }
+                  className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                  {mode === "signup"
+                    ? pending ? "Creating Account..." : "Create Account"
+                    : pending ? "Signing in..." : "Sign in to Bolo"}
+                  {!pending && <ArrowRight className="size-4" />}
+                </button>
               </form>
             )}
           </div>
@@ -932,8 +640,7 @@ function Field({
 function RequirementItem({ met, label }: { met: boolean; label: string }) {
   return (
     <div
-      className={`flex items-center gap-1 text-[10px] transition-colors ${met ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80"
-        }`}
+      className={`flex items-center gap-1 text-[10px] transition-colors ${met ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80"}`}
     >
       {met ? (
         <Check className="size-3 shrink-0 stroke-[3]" />
