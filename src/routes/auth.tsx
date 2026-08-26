@@ -276,8 +276,8 @@ function AuthPage() {
 
       const cleanPhone = phone.trim();
       if (cleanPhone) {
-        const phoneValidation = validateIndianPhone(cleanPhone);
-        if (!phoneValidation.valid) {
+        const isValidPhone = validateIndianPhone(cleanPhone);
+        if (!isValidPhone) {
           setPhoneError("Please enter a valid 10-digit Indian mobile number.");
           return;
         }

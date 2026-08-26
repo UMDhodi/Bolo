@@ -307,6 +307,11 @@ export async function createBoloAccount(input: {
   });
 }
 
+const ACTION_CODE_SETTINGS = {
+  url: "https://bolo-three.vercel.app/",
+  handleCodeInApp: false,
+};
+
 export async function resendVerificationEmail(): Promise<void> {
   if (auth.currentUser) {
     await sendEmailVerification(auth.currentUser, ACTION_CODE_SETTINGS);

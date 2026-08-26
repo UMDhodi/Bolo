@@ -16,6 +16,5 @@ export default defineConfig({
   // output (.vercel/output) instead of the default cloudflare-module layout.
   nitro: {
     preset: "vercel",
-    inlineDynamicImports: true,
   },
 });

@@ -94,8 +94,13 @@ export async function ensureMsg91Sdk(): Promise<boolean> {
         resolve(false);
         return;
       }
+      const currentUrl = scriptUrls[index];
+      if (!currentUrl) {
+        resolve(false);
+        return;
+      }
       const script = document.createElement("script");
-      script.src = scriptUrls[index];
+      script.src = currentUrl;
       script.async = true;
       script.onload = () => initSdk();
       script.onerror = () => {
