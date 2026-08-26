@@ -178,10 +178,14 @@ function SessionGate({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isNavigatingRef = useRef(false);
 
+  const isCreatingProfile =
+    typeof window !== "undefined" &&
+    window.sessionStorage?.getItem("bolo_is_creating_profile") === "true";
+
   useEffect(() => {
     if (loading) return;
-    // Authenticated users on /auth go home
-    if (user && pathname === "/auth" && !isNavigatingRef.current) {
+    // Authenticated users on /auth go home unless they are currently filling their profile
+    if (user && pathname === "/auth" && !isCreatingProfile && !isNavigatingRef.current) {
       isNavigatingRef.current = true;
       void navigate({ to: "/", replace: true }).finally(() => {
         isNavigatingRef.current = false;
@@ -194,7 +198,7 @@ function SessionGate({ children }: { children: ReactNode }) {
         isNavigatingRef.current = false;
       });
     }
-  }, [loading, navigate, pathname, user]);
+  }, [loading, navigate, pathname, user, isCreatingProfile]);
 
   if (loading) {
     return (
@@ -212,7 +216,7 @@ function SessionGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (user && pathname === "/auth") {
+  if (user && pathname === "/auth" && !isCreatingProfile) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-4">
         <p className="text-sm font-semibold text-muted-foreground">Redirecting to home…</p>

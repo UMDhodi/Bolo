@@ -35,7 +35,7 @@ import {
 } from "firebase/database";
 import { type Issue } from "./mock-data";
 import { resolveLocationCoordinates } from "./location-resolver";
-import { sanitizeInput, validateStrongPassword } from "./utils";
+import { sanitizeInput, validateStrongPassword, hashPassword } from "./utils";
 import { logSecurityEvent } from "./security-logger";
 
 export type BoloUser = {
@@ -195,17 +195,16 @@ function message(error: unknown) {
  * directSignUp: Creates a Firebase Auth account and immediately saves the user record
  * to Realtime Database. No email verification step — user goes straight to home.
  */
-export async function directSignUp(email: string, password: string): Promise<BoloUser> {
+export async function signUpWithCredentials(email: string, password: string): Promise<User> {
   const pwdValidation = validateStrongPassword(password);
   if (!pwdValidation.valid) {
     throw new Error(`Password security requirements not met: ${pwdValidation.errors.join(", ")}.`);
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  let credential;
-
   try {
-    credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+    const credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+    return credential.user;
   } catch (err: unknown) {
     const errStr = String(err);
     if (errStr.includes("email-already-in-use")) {
@@ -213,42 +212,26 @@ export async function directSignUp(email: string, password: string): Promise<Bol
     }
     throw err;
   }
-
-  if (credential && credential.user) {
-    const uid = credential.user.uid;
-    // Use the part before @ as default display name
-    const defaultName = cleanEmail.split("@")[0] ?? "Bolo Citizen";
-
-    // Set displayName in Firebase Auth
-    try {
-      await updateProfile(credential.user, { displayName: defaultName });
-    } catch {
-      // non-fatal
-    }
-
-    // Save to Realtime Database — no password stored
-    try {
-      const userRef = ref(db, `users/${uid}`);
-      const snap = await get(userRef);
-      const existing = snap.exists() ? (snap.val() as Record<string, unknown>) : {};
-      await set(userRef, {
-        uid,
-        email: cleanEmail,
-        displayName: (existing["displayName"] as string) || defaultName,
-        phone: (existing["phone"] as string) || "",
-        role: (existing["role"] as string) || "citizen",
-        createdAt: (existing["createdAt"] as number) || Date.now(),
-      });
-    } catch (dbErr) {
-      console.warn("Could not save user record to Realtime Database:", dbErr);
-    }
-
-    return toBoloUser(credential.user);
-  }
-
-  throw new Error("Unable to create account.");
 }
 
+/**
+ * directSignUp: Creates a Firebase Auth account and immediately saves the user record
+ * to Realtime Database.
+ */
+export async function directSignUp(email: string, password: string): Promise<BoloUser> {
+  const user = await signUpWithCredentials(email, password);
+  const cleanEmail = email.trim().toLowerCase();
+  const defaultName = cleanEmail.split("@")[0] ?? "Bolo Citizen";
+  
+  await saveCitizenProfile({
+    uid: user.uid,
+    displayName: defaultName,
+    email: cleanEmail,
+    password,
+  });
+
+  return toBoloUser(user);
+}
 
 export async function saveCitizenProfile(input: {
   uid: string;
@@ -256,6 +239,7 @@ export async function saveCitizenProfile(input: {
   legalName?: string;
   phone?: string;
   email?: string;
+  password?: string;
 }): Promise<UserProfile> {
   const current = auth.currentUser;
   if (current && input.displayName) {
@@ -273,26 +257,34 @@ export async function saveCitizenProfile(input: {
     : "";
 
   const userRef = ref(db, `users/${input.uid}`);
-  let existingCreatedAt: number | null = null;
+  let existingData: Record<string, unknown> = {};
   try {
     const snap = await get(userRef);
     if (snap.exists()) {
-      const existingData = snap.val() as Record<string, unknown>;
-      existingCreatedAt = (existingData["createdAt"] as number) || null;
+      existingData = snap.val() as Record<string, unknown>;
     }
   } catch {
     // fallback — proceed without existing data
   }
 
-  // Build the profile payload with only required + safe fields — never store passwords
+  let hashedPassword = existingData["password"] as string | undefined;
+  if (input.password) {
+    try {
+      hashedPassword = await hashPassword(input.password);
+    } catch (hashErr) {
+      console.warn("Could not hash password for database storage:", hashErr);
+    }
+  }
+
   const profilePayload: UserProfile = {
     uid: input.uid,
     displayName: input.displayName.trim(),
     legalName: (input.legalName || input.displayName).trim(),
     phone: cleanPhone,
-    email: input.email || current?.email || "",
-    role: "citizen",
-    createdAt: existingCreatedAt ?? Date.now(),
+    email: input.email || current?.email || (existingData["email"] as string) || "",
+    role: (existingData["role"] as string) || "citizen",
+    createdAt: (existingData["createdAt"] as number) || Date.now(),
+    ...(hashedPassword ? { password: hashedPassword } : {}),
   };
 
   await set(userRef, profilePayload);
@@ -311,6 +303,7 @@ export async function createBoloAccount(input: {
     legalName: input.displayName,
     phone: input.phone,
     email: input.email,
+    password: input.password,
   });
 }
 

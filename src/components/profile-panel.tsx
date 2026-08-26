@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import SpinnerToCheck from "@/components/loader";
+import BSpinnerToCheck from "@/components/bspinnertocheck";
 import { useAuth } from "@/components/auth-context";
 import { useT } from "@/components/language-context";
 import {
@@ -272,7 +273,7 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
       setDeleteConfirmOpen(false);
       setProfileDialogOpen(false);
       if (typeof window !== "undefined") {
-        window.location.href = "/auth";
+        window.location.replace("/auth");
       }
     } catch (err) {
       toast.error(getFirebaseErrorMessage(err));
@@ -638,6 +639,7 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
                 disabled={deletingAccount}
                 className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60"
               >
+                {deletingAccount ? <BSpinnerToCheck size={18} color="#ffffff" bg="#dc2626" /> : null}
                 {deletingAccount ? "Deleting…" : "Confirm Delete"}
               </button>
             </div>

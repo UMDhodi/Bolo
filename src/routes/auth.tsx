@@ -10,13 +10,18 @@ import {
   KeyRound,
   RotateCw,
   ShieldCheck,
+  User as UserIcon,
+  Phone,
+  ArrowLeft,
+  CheckCircle2,
 } from "lucide-react";
 
 import civicIllustration from "@/assets/bolo-auth-civic-india.png";
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import {
-  directSignUp,
+  signUpWithCredentials,
+  saveCitizenProfile,
   getFirebaseErrorMessage,
   signInToBolo,
   signInWithGoogle,
@@ -24,6 +29,7 @@ import {
   auth,
 } from "@/lib/firebase";
 import { validateStrongPassword, validateEmailDomain } from "@/lib/utils";
+import { validateIndianPhone } from "@/lib/msg91";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Welcome to Bolo" }] }),
@@ -31,17 +37,27 @@ export const Route = createFileRoute("/auth")({
 });
 
 type Mode = "signup" | "signin" | "forgot_password";
+type SignupStep = "credentials" | "profile";
 
 function AuthPage() {
   const navigate = useNavigate();
   const { user, configured } = useAuth();
 
   const [mode, setMode] = useState<Mode>("signup");
+  const [signupStep, setSignupStep] = useState<SignupStep>("credentials");
 
-  // Form Fields
+  // Credentials Fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Profile Fields
+  const [displayName, setDisplayName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Temporary password storage during profile setup step
+  const [tempPassword, setTempPassword] = useState("");
 
   // Password Reset States
   const [resendTimer, setResendTimer] = useState(30);
@@ -49,19 +65,23 @@ function AuthPage() {
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
 
-  // Inline email domain error
+  // Inline email error
   const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
 
   // General state
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Redirect already-authenticated users to home
+  // Redirect already-authenticated users to home (only if not in profile creation step)
   useEffect(() => {
-    if (user) {
+    const isCreatingProfile =
+      typeof window !== "undefined" &&
+      window.sessionStorage?.getItem("bolo_is_creating_profile") === "true";
+
+    if (user && !isCreatingProfile && signupStep !== "profile") {
       void navigate({ to: "/" });
     }
-  }, [user, navigate]);
+  }, [user, navigate, signupStep]);
 
   // Resend countdown timer (for forgot-password flow)
   useEffect(() => {
@@ -84,10 +104,15 @@ function AuthPage() {
 
   const resetAllStates = (newMode: Mode) => {
     setMode(newMode);
+    setSignupStep("credentials");
     setError(null);
     setEmailNotice(null);
     setResetSent(false);
     setEmailFieldError(null);
+    setPhoneError(null);
+    if (typeof window !== "undefined") {
+      window.sessionStorage?.removeItem("bolo_is_creating_profile");
+    }
   };
 
   // Google OAuth
@@ -95,6 +120,9 @@ function AuthPage() {
     setError(null);
     setPending(true);
     try {
+      if (typeof window !== "undefined") {
+        window.sessionStorage?.removeItem("bolo_is_creating_profile");
+      }
       await signInWithGoogle();
       await navigate({ to: "/" });
     } catch (err) {
@@ -162,6 +190,9 @@ function AuthPage() {
     if (mode === "signin") {
       setPending(true);
       try {
+        if (typeof window !== "undefined") {
+          window.sessionStorage?.removeItem("bolo_is_creating_profile");
+        }
         await signInToBolo(email.trim(), password);
         await navigate({ to: "/" });
       } catch (nextError) {
@@ -177,14 +208,14 @@ function AuthPage() {
       return;
     }
 
-    // ── Sign Up: validate → create account → save RTDB → redirect home ──
-    if (mode === "signup") {
+    // ── Sign Up: Step 1 (Credentials -> Create Profile) ──
+    if (mode === "signup" && signupStep === "credentials") {
       const cleanEmail = email.trim().toLowerCase();
 
       // 1. Email domain validation
       const domainCheck = validateEmailDomain(cleanEmail);
       if (!domainCheck.valid) {
-        setEmailFieldError(domainCheck.error || "Please use a valid email provider (Gmail, Outlook, Yahoo, iCloud, etc.).");
+        setEmailFieldError(domainCheck.error || "Please use a trusted email provider (Gmail, Outlook, Yahoo, iCloud, Proton, etc.).");
         return;
       }
       setEmailFieldError(null);
@@ -202,20 +233,84 @@ function AuthPage() {
 
       setPending(true);
       try {
-        await directSignUp(cleanEmail, password);
-        await navigate({ to: "/" });
+        if (typeof window !== "undefined") {
+          window.sessionStorage?.setItem("bolo_is_creating_profile", "true");
+        }
+        await signUpWithCredentials(cleanEmail, password);
+        setTempPassword(password);
+        // Pre-fill a suggestion from email
+        if (!displayName) {
+          const suggestedName = cleanEmail.split("@")[0]?.replace(/[._]/g, " ") || "";
+          if (suggestedName) {
+            setDisplayName(suggestedName.charAt(0).toUpperCase() + suggestedName.slice(1));
+          }
+        }
+        // Realtime transition to Create Profile step
+        setSignupStep("profile");
       } catch (nextError) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage?.removeItem("bolo_is_creating_profile");
+        }
         const errStr = (nextError instanceof Error ? nextError.message : String(nextError)).toLowerCase();
         if (errStr.includes("quota-exceeded") || errStr.includes("quota")) {
           void navigate({ to: "/waitlist" });
           return;
         }
-        // Show duplicate email error inline on the email field
         if (errStr.includes("already registered") || errStr.includes("email-already-in-use")) {
           setEmailFieldError(nextError instanceof Error ? nextError.message : "This email is already registered. Please sign in instead.");
         } else {
           setError(getFirebaseErrorMessage(nextError));
         }
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
+
+    // ── Sign Up: Step 2 (Create Profile -> Store in RTDB -> Home) ──
+    if (mode === "signup" && signupStep === "profile") {
+      const cleanName = displayName.trim();
+      if (!cleanName || cleanName.length < 2) {
+        return setError("Please enter your full name (minimum 2 characters).");
+      }
+
+      const cleanPhone = phone.trim();
+      if (cleanPhone) {
+        const phoneValidation = validateIndianPhone(cleanPhone);
+        if (!phoneValidation.valid) {
+          setPhoneError("Please enter a valid 10-digit Indian mobile number.");
+          return;
+        }
+      }
+      setPhoneError(null);
+
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setError("Session expired. Please sign in.");
+        setSignupStep("credentials");
+        return;
+      }
+
+      setPending(true);
+      try {
+        // Save all citizen profile data to Realtime Database including encrypted password
+        await saveCitizenProfile({
+          uid: currentUser.uid,
+          displayName: cleanName,
+          legalName: cleanName,
+          phone: cleanPhone || "",
+          email: currentUser.email || email.trim().toLowerCase(),
+          password: tempPassword || password,
+        });
+
+        if (typeof window !== "undefined") {
+          window.sessionStorage?.removeItem("bolo_is_creating_profile");
+        }
+
+        // Realtime redirect to home site
+        await navigate({ to: "/" });
+      } catch (nextError) {
+        setError(getFirebaseErrorMessage(nextError));
       } finally {
         setPending(false);
       }
@@ -263,7 +358,9 @@ function AuthPage() {
               {mode === "forgot_password"
                 ? "Reset your password."
                 : mode === "signup"
-                  ? "Join the change."
+                  ? signupStep === "profile"
+                    ? "Complete your Profile."
+                    : "Join the change."
                   : "Welcome back."}
             </h1>
 
@@ -271,12 +368,14 @@ function AuthPage() {
               {mode === "forgot_password"
                 ? "Enter your registered email and we'll send you a password reset link."
                 : mode === "signup"
-                  ? "Create your account with your genuine email (Gmail, Outlook, Yahoo, etc.)."
+                  ? signupStep === "profile"
+                    ? "Enter your name and phone number to finish setting up your citizen profile."
+                    : "Create your account with your genuine email (Gmail, Outlook, Yahoo, etc.)."
                   : "Sign in to report issues and track resolutions in your area."}
             </p>
 
-            {/* Mode Selector Tabs */}
-            {mode !== "forgot_password" && (
+            {/* Mode Selector Tabs (only in credentials step) */}
+            {mode !== "forgot_password" && signupStep === "credentials" && (
               <div className="mt-3 grid grid-cols-2 rounded-2xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
                 <button
                   type="button"
@@ -305,8 +404,8 @@ function AuthPage() {
               </div>
             )}
 
-            {/* Google OAuth */}
-            {mode !== "forgot_password" && (
+            {/* Google OAuth (only in credentials step) */}
+            {mode !== "forgot_password" && signupStep === "credentials" && (
               <div className="mt-3">
                 <button
                   type="button"
@@ -425,8 +524,8 @@ function AuthPage() {
               /* ── Main Sign Up / Sign In Forms ── */
               <form onSubmit={submit} className="space-y-3 pt-1" noValidate>
 
-                {/* ── Sign Up Form ── */}
-                {mode === "signup" && (
+                {/* ── Sign Up: Step 1 (Email, Password, Confirm) ── */}
+                {mode === "signup" && signupStep === "credentials" && (
                   <>
                     {/* Email with inline domain validation */}
                     <div>
@@ -515,6 +614,73 @@ function AuthPage() {
                   </>
                 )}
 
+                {/* ── Sign Up: Step 2 (Create Profile Form) ── */}
+                {mode === "signup" && signupStep === "profile" && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary">
+                          <CheckCircle2 className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold text-muted-foreground">Account Created for</p>
+                          <p className="text-xs font-bold text-foreground">{email}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSignupStep("credentials");
+                          if (typeof window !== "undefined") {
+                            window.sessionStorage?.removeItem("bolo_is_creating_profile");
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        <ArrowLeft className="size-3" /> Back
+                      </button>
+                    </div>
+
+                    <Field
+                      label="Full / Display Name"
+                      type="text"
+                      autoComplete="name"
+                      autoFocus
+                      disabled={pending}
+                      value={displayName}
+                      onChange={setDisplayName}
+                      placeholder="e.g. Aarav Mehta"
+                      icon={<UserIcon className="size-4 text-muted-foreground" />}
+                      required
+                    />
+
+                    <div>
+                      <Field
+                        label="Mobile Number (Optional)"
+                        type="tel"
+                        autoComplete="tel"
+                        disabled={pending}
+                        value={phone}
+                        onChange={(val) => {
+                          setPhone(val);
+                          if (phoneError) setPhoneError(null);
+                        }}
+                        placeholder="e.g. 9876543210"
+                        icon={<Phone className="size-4 text-muted-foreground" />}
+                      />
+                      {phoneError ? (
+                        <p role="alert" className="mt-1 text-[11px] font-medium text-destructive">
+                          {phoneError}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          Used for municipal status SMS updates.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* ── Sign In Form ── */}
                 {mode === "signin" && (
                   <>
@@ -580,15 +746,17 @@ function AuthPage() {
                   type="submit"
                   disabled={
                     pending ||
-                    !email ||
-                    !password ||
-                    (mode === "signup" && (password !== confirmPassword || !!emailFieldError))
+                    (mode === "signup" && signupStep === "credentials" && (!email || !password || password !== confirmPassword || !!emailFieldError)) ||
+                    (mode === "signup" && signupStep === "profile" && !displayName.trim()) ||
+                    (mode === "signin" && (!email || !password))
                   }
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
                   {mode === "signup"
-                    ? pending ? "Creating Account..." : "Create Account"
+                    ? signupStep === "credentials"
+                      ? pending ? "Validating & Creating Profile..." : "Create Profile"
+                      : pending ? "Saving Profile & Redirecting..." : "Save Profile & Enter Bolo"
                     : pending ? "Signing in..." : "Sign in to Bolo"}
                   {!pending && <ArrowRight className="size-4" />}
                 </button>
