@@ -56,7 +56,8 @@ function AuthPage() {
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
-  // Temporary password storage during profile setup step
+  // Temporary UID & Password storage during profile setup step
+  const [createdUid, setCreatedUid] = useState("");
   const [tempPassword, setTempPassword] = useState("");
 
   // Password Reset States
@@ -68,11 +69,15 @@ function AuthPage() {
   // Inline email error
   const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
 
-  // General state
+  // General state & dedicated loading states to prevent button state bleed
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [authPending, setAuthPending] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
 
-  // Redirect already-authenticated users to home (only if not in profile creation step)
+  const isAnyPending = authPending || googlePending || resetPending;
+
+  // Redirect already-authenticated users to home (only if not currently creating profile)
   useEffect(() => {
     const isCreatingProfile =
       typeof window !== "undefined" &&
@@ -110,6 +115,8 @@ function AuthPage() {
     setResetSent(false);
     setEmailFieldError(null);
     setPhoneError(null);
+    setCreatedUid("");
+    setTempPassword("");
     if (typeof window !== "undefined") {
       window.sessionStorage?.removeItem("bolo_is_creating_profile");
     }
@@ -118,13 +125,17 @@ function AuthPage() {
   // Google OAuth
   async function handleGoogleAuth() {
     setError(null);
-    setPending(true);
+    setGooglePending(true);
     try {
       if (typeof window !== "undefined") {
         window.sessionStorage?.removeItem("bolo_is_creating_profile");
       }
       await signInWithGoogle();
-      await navigate({ to: "/" });
+      if (typeof window !== "undefined") {
+        window.location.replace("/");
+      } else {
+        await navigate({ to: "/" });
+      }
     } catch (err) {
       const errStr = (err instanceof Error ? err.message : String(err)).toLowerCase();
       if (errStr.includes("quota-exceeded") || errStr.includes("quota") || errStr.includes("limit")) {
@@ -133,15 +144,15 @@ function AuthPage() {
       }
       setError(getFirebaseErrorMessage(err));
     } finally {
-      setPending(false);
+      setGooglePending(false);
     }
   }
 
   // Resend password reset link
   async function handleResendPasswordReset() {
-    if (!canResend || pending) return;
+    if (!canResend || resetPending) return;
     setError(null);
-    setPending(true);
+    setResetPending(true);
     try {
       await sendPasswordResetLink(email.trim());
       setEmailNotice("New password reset link sent. Please check your inbox.");
@@ -150,7 +161,7 @@ function AuthPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resend password reset link.");
     } finally {
-      setPending(false);
+      setResetPending(false);
     }
   }
 
@@ -171,7 +182,7 @@ function AuthPage() {
       if (!domainCheck.valid) {
         return setError(domainCheck.error || "Please enter a valid email address.");
       }
-      setPending(true);
+      setResetPending(true);
       try {
         await sendPasswordResetLink(cleanEmail);
         setResetSent(true);
@@ -181,20 +192,24 @@ function AuthPage() {
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
       } finally {
-        setPending(false);
+        setResetPending(false);
       }
       return;
     }
 
     // ── Sign In ──
     if (mode === "signin") {
-      setPending(true);
+      setAuthPending(true);
       try {
         if (typeof window !== "undefined") {
           window.sessionStorage?.removeItem("bolo_is_creating_profile");
         }
         await signInToBolo(email.trim(), password);
-        await navigate({ to: "/" });
+        if (typeof window !== "undefined") {
+          window.location.replace("/");
+        } else {
+          await navigate({ to: "/" });
+        }
       } catch (nextError) {
         const errStr = (nextError instanceof Error ? nextError.message : String(nextError)).toLowerCase();
         if (errStr.includes("quota-exceeded") || errStr.includes("quota")) {
@@ -203,7 +218,7 @@ function AuthPage() {
         }
         setError(getFirebaseErrorMessage(nextError));
       } finally {
-        setPending(false);
+        setAuthPending(false);
       }
       return;
     }
@@ -231,21 +246,22 @@ function AuthPage() {
         return setError("Passwords do not match.");
       }
 
-      setPending(true);
+      setAuthPending(true);
       try {
         if (typeof window !== "undefined") {
           window.sessionStorage?.setItem("bolo_is_creating_profile", "true");
         }
-        await signUpWithCredentials(cleanEmail, password);
+        const createdUser = await signUpWithCredentials(cleanEmail, password);
+        setCreatedUid(createdUser.uid);
         setTempPassword(password);
-        // Pre-fill a suggestion from email
+        // Pre-fill suggestion from email prefix
         if (!displayName) {
           const suggestedName = cleanEmail.split("@")[0]?.replace(/[._]/g, " ") || "";
           if (suggestedName) {
             setDisplayName(suggestedName.charAt(0).toUpperCase() + suggestedName.slice(1));
           }
         }
-        // Realtime transition to Create Profile step
+        // Realtime transition to Profile setup step
         setSignupStep("profile");
       } catch (nextError) {
         if (typeof window !== "undefined") {
@@ -262,7 +278,7 @@ function AuthPage() {
           setError(getFirebaseErrorMessage(nextError));
         }
       } finally {
-        setPending(false);
+        setAuthPending(false);
       }
       return;
     }
@@ -284,35 +300,35 @@ function AuthPage() {
       }
       setPhoneError(null);
 
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      const targetUid = auth.currentUser?.uid || createdUid;
+      if (!targetUid) {
         setError("Session expired. Please sign in.");
         setSignupStep("credentials");
         return;
       }
 
-      setPending(true);
+      setAuthPending(true);
       try {
         // Save all citizen profile data to Realtime Database including encrypted password
         await saveCitizenProfile({
-          uid: currentUser.uid,
+          uid: targetUid,
           displayName: cleanName,
           legalName: cleanName,
           phone: cleanPhone || "",
-          email: currentUser.email || email.trim().toLowerCase(),
+          email: auth.currentUser?.email || email.trim().toLowerCase(),
           password: tempPassword || password,
         });
 
         if (typeof window !== "undefined") {
           window.sessionStorage?.removeItem("bolo_is_creating_profile");
+          window.location.replace("/");
+        } else {
+          await navigate({ to: "/" });
         }
-
-        // Realtime redirect to home site
-        await navigate({ to: "/" });
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
       } finally {
-        setPending(false);
+        setAuthPending(false);
       }
       return;
     }
@@ -380,7 +396,7 @@ function AuthPage() {
                 <button
                   type="button"
                   role="tab"
-                  disabled={pending}
+                  disabled={isAnyPending}
                   aria-selected={mode === "signup"}
                   onClick={() => resetAllStates("signup")}
                   className={`min-h-9 rounded-xl text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-60 ${
@@ -392,7 +408,7 @@ function AuthPage() {
                 <button
                   type="button"
                   role="tab"
-                  disabled={pending}
+                  disabled={isAnyPending}
                   aria-selected={mode === "signin"}
                   onClick={() => resetAllStates("signin")}
                   className={`min-h-9 rounded-xl text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-60 ${
@@ -410,10 +426,10 @@ function AuthPage() {
                 <button
                   type="button"
                   onClick={handleGoogleAuth}
-                  disabled={pending}
+                  disabled={isAnyPending}
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2.5 rounded-2xl border border-input bg-card px-4 text-xs font-bold text-foreground shadow-soft transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {pending ? (
+                  {googlePending ? (
                     <BSpinnerToCheck size={18} color="#059669" bg="#ffffff" />
                   ) : (
                     <svg className="size-4" viewBox="0 0 24 24">
@@ -423,7 +439,7 @@ function AuthPage() {
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                     </svg>
                   )}
-                  {pending ? "Connecting..." : "Continue with Google"}
+                  {googlePending ? "Connecting..." : "Continue with Google"}
                 </button>
 
                 <div className="relative my-3 flex items-center justify-center">
@@ -464,7 +480,7 @@ function AuthPage() {
                       <button
                         type="button"
                         onClick={handleResendPasswordReset}
-                        disabled={pending || !canResend}
+                        disabled={resetPending || !canResend}
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-input bg-card px-4 text-xs font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <RotateCw className="size-3.5" />
@@ -487,7 +503,7 @@ function AuthPage() {
                       type="email"
                       autoComplete="email"
                       autoFocus
-                      disabled={pending}
+                      disabled={resetPending}
                       value={email}
                       onChange={setEmail}
                       placeholder="you@gmail.com"
@@ -503,11 +519,11 @@ function AuthPage() {
 
                     <button
                       type="submit"
-                      disabled={pending || !email}
+                      disabled={resetPending || !email}
                       className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-                      {pending ? "Sending Link..." : "Send Password Reset Link"}
+                      {resetPending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                      {resetPending ? "Sending Link..." : "Send Password Reset Link"}
                     </button>
 
                     <button
@@ -549,7 +565,7 @@ function AuthPage() {
                           id="signup-email"
                           type="email"
                           autoComplete="email"
-                          disabled={pending}
+                          disabled={authPending}
                           value={email}
                           onChange={(e) => {
                             setEmail(e.target.value);
@@ -584,7 +600,7 @@ function AuthPage() {
                         label="Create password"
                         type="password"
                         autoComplete="new-password"
-                        disabled={pending}
+                        disabled={authPending}
                         value={password}
                         onChange={setPassword}
                         placeholder="8+ characters (Aa, 1, #)"
@@ -604,7 +620,7 @@ function AuthPage() {
                       label="Confirm password"
                       type="password"
                       autoComplete="new-password"
-                      disabled={pending}
+                      disabled={authPending}
                       value={confirmPassword}
                       onChange={setConfirmPassword}
                       placeholder="Repeat your password"
@@ -646,7 +662,7 @@ function AuthPage() {
                       type="text"
                       autoComplete="name"
                       autoFocus
-                      disabled={pending}
+                      disabled={authPending}
                       value={displayName}
                       onChange={setDisplayName}
                       placeholder="e.g. Aarav Mehta"
@@ -659,7 +675,7 @@ function AuthPage() {
                         label="Mobile Number (Optional)"
                         type="tel"
                         autoComplete="tel"
-                        disabled={pending}
+                        disabled={authPending}
                         value={phone}
                         onChange={(val) => {
                           setPhone(val);
@@ -688,7 +704,7 @@ function AuthPage() {
                       label="Email address"
                       type="email"
                       autoComplete="email"
-                      disabled={pending}
+                      disabled={authPending}
                       value={email}
                       onChange={setEmail}
                       placeholder="you@gmail.com"
@@ -714,7 +730,7 @@ function AuthPage() {
                           Forgot password?
                         </button>
                       </div>
-                      <div className={`flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${pending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
+                      <div className={`flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${authPending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""}`}>
                         <span className="flex items-center pl-3 text-muted-foreground">
                           <Lock className="size-4" />
                         </span>
@@ -722,7 +738,7 @@ function AuthPage() {
                           id="signin-password"
                           type="password"
                           autoComplete="current-password"
-                          disabled={pending}
+                          disabled={authPending}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Your password"
@@ -745,20 +761,20 @@ function AuthPage() {
                 <button
                   type="submit"
                   disabled={
-                    pending ||
+                    isAnyPending ||
                     (mode === "signup" && signupStep === "credentials" && (!email || !password || password !== confirmPassword || !!emailFieldError)) ||
                     (mode === "signup" && signupStep === "profile" && !displayName.trim()) ||
                     (mode === "signin" && (!email || !password))
                   }
                   className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                  {authPending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
                   {mode === "signup"
                     ? signupStep === "credentials"
-                      ? pending ? "Validating & Creating Profile..." : "Create Profile"
-                      : pending ? "Saving Profile & Redirecting..." : "Save Profile & Enter Bolo"
-                    : pending ? "Signing in..." : "Sign in to Bolo"}
-                  {!pending && <ArrowRight className="size-4" />}
+                      ? authPending ? "Validating & Creating Profile..." : "Create Profile"
+                      : authPending ? "Saving Profile & Redirecting..." : "Save Profile & Enter Bolo"
+                    : authPending ? "Signing in..." : "Sign in to Bolo"}
+                  {!authPending && <ArrowRight className="size-4" />}
                 </button>
               </form>
             )}

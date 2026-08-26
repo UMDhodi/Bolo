@@ -241,6 +241,12 @@ export async function saveCitizenProfile(input: {
   email?: string;
   password?: string;
 }): Promise<UserProfile> {
+  try {
+    goOnline(db);
+  } catch {
+    // ignore
+  }
+
   const current = auth.currentUser;
   if (current && input.displayName) {
     try {
@@ -256,18 +262,7 @@ export async function saveCitizenProfile(input: {
       : `+91${input.phone.replace(/\D/g, "")}`
     : "";
 
-  const userRef = ref(db, `users/${input.uid}`);
-  let existingData: Record<string, unknown> = {};
-  try {
-    const snap = await get(userRef);
-    if (snap.exists()) {
-      existingData = snap.val() as Record<string, unknown>;
-    }
-  } catch {
-    // fallback — proceed without existing data
-  }
-
-  let hashedPassword = existingData["password"] as string | undefined;
+  let hashedPassword: string | undefined = undefined;
   if (input.password) {
     try {
       hashedPassword = await hashPassword(input.password);
@@ -281,12 +276,13 @@ export async function saveCitizenProfile(input: {
     displayName: input.displayName.trim(),
     legalName: (input.legalName || input.displayName).trim(),
     phone: cleanPhone,
-    email: input.email || current?.email || (existingData["email"] as string) || "",
-    role: (existingData["role"] as string) || "citizen",
-    createdAt: (existingData["createdAt"] as number) || Date.now(),
+    email: input.email || current?.email || "",
+    role: "citizen",
+    createdAt: Date.now(),
     ...(hashedPassword ? { password: hashedPassword } : {}),
   };
 
+  const userRef = ref(db, `users/${input.uid}`);
   await set(userRef, profilePayload);
   return profilePayload;
 }
@@ -345,12 +341,13 @@ export async function updateUserPassword(newPassword: string): Promise<void> {
     throw new Error(`Password requirement: ${pwdValidation.errors.join(", ")}.`);
   }
 
-  // 1. Direct Firebase Auth password update (no verification link required)
+  // 1. Direct Firebase Auth password update
   await updatePassword(auth.currentUser, newPassword);
 
   // 2. Encrypt and store password hash in Realtime Database under users/${uid}
   const hashedPassword = await hashPassword(newPassword);
   try {
+    goOnline(db);
     await update(ref(db, `users/${auth.currentUser.uid}`), {
       password: hashedPassword,
     });
@@ -364,43 +361,22 @@ export async function signInToBolo(email: string, password: string) {
   const hashedPassword = await hashPassword(password);
 
   try {
-    const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-    // Ensure encrypted password hash and email are updated in RTDB
-    try {
-      await update(ref(db, `users/${credential.user.uid}`), {
-        password: hashedPassword,
-        email: cleanEmail,
-      });
-    } catch {
-      // ignore
-    }
-    return toBoloUser(credential.user);
-  } catch (err: unknown) {
-    // If standard Auth fails, check if user exists in RTDB by email with matching encrypted password
-    try {
-      const userQuery = query(ref(db, "users"), orderByChild("email"), equalTo(cleanEmail));
-      const snap = await get(userQuery);
-      if (snap.exists()) {
-        const records = Object.values(snap.val() as Record<string, UserProfile>);
-        const matched = records.find((u) => u.password === hashedPassword || (u.email && u.email.toLowerCase() === cleanEmail));
-        if (matched && matched.password === hashedPassword) {
-          if (auth.currentUser && auth.currentUser.uid === matched.uid) {
-            return toBoloUser(auth.currentUser);
-          }
-          // Authenticate session
-          try {
-            const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-            return toBoloUser(newCred.user);
-          } catch {
-            // ignore
-          }
-        }
-      }
-    } catch (lookupErr) {
-      console.warn("Password lookup notice:", lookupErr);
-    }
-    throw err;
+    goOnline(db);
+  } catch {
+    // ignore
   }
+
+  const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+  // Ensure encrypted password hash and email are updated in RTDB
+  try {
+    await update(ref(db, `users/${credential.user.uid}`), {
+      password: hashedPassword,
+      email: cleanEmail,
+    });
+  } catch {
+    // non-fatal
+  }
+  return toBoloUser(credential.user);
 }
 
 export async function signInWithGoogle() {
