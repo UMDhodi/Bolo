@@ -241,16 +241,13 @@ export async function saveCitizenProfile(input: {
   email?: string;
   password?: string;
 }): Promise<UserProfile> {
-  try {
-    goOnline(db);
-  } catch {
-    // ignore
-  }
-
   const current = auth.currentUser;
-  if (current && input.displayName) {
+  const cleanDisplayName = input.displayName.trim();
+
+  // 1. Update Firebase Auth displayName
+  if (current && cleanDisplayName) {
     try {
-      await updateProfile(current, { displayName: input.displayName.trim() });
+      await updateProfile(current, { displayName: cleanDisplayName });
     } catch (e) {
       console.warn("Could not update auth displayName:", e);
     }
@@ -273,8 +270,8 @@ export async function saveCitizenProfile(input: {
 
   const profilePayload: UserProfile = {
     uid: input.uid,
-    displayName: input.displayName.trim(),
-    legalName: (input.legalName || input.displayName).trim(),
+    displayName: cleanDisplayName,
+    legalName: (input.legalName || cleanDisplayName).trim(),
     phone: cleanPhone,
     email: input.email || current?.email || "",
     role: "citizen",
@@ -282,8 +279,33 @@ export async function saveCitizenProfile(input: {
     ...(hashedPassword ? { password: hashedPassword } : {}),
   };
 
-  const userRef = ref(db, `users/${input.uid}`);
-  await set(userRef, profilePayload);
+  // 2. Direct REST write using ID Token (guaranteed fast HTTP PUT, bypasses any WebSocket lag)
+  try {
+    if (current) {
+      const idToken = await current.getIdToken(true);
+      const restUrl = `${firebaseConfig.databaseURL}/users/${input.uid}.json?auth=${idToken}`;
+      await fetch(restUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profilePayload),
+      });
+    }
+  } catch (restErr) {
+    console.warn("REST profile save notice:", restErr);
+  }
+
+  // 3. SDK write with goOnline and timeout race
+  try {
+    goOnline(db);
+    const userRef = ref(db, `users/${input.uid}`);
+    await Promise.race([
+      set(userRef, profilePayload),
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
+  } catch (sdkErr) {
+    console.warn("SDK profile save notice:", sdkErr);
+  }
+
   return profilePayload;
 }
 
