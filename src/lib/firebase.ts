@@ -209,11 +209,9 @@ export async function directSignUp(email: string, password: string): Promise<Bol
   } catch (err: unknown) {
     const errStr = String(err);
     if (errStr.includes("email-already-in-use")) {
-      // Already registered — sign them in
-      credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-    } else {
-      throw err;
+      throw new Error("This email is already registered. Please sign in instead, or use the 'Forgot password?' link if you've lost access.");
     }
+    throw err;
   }
 
   if (credential && credential.user) {
