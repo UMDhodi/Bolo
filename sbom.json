@@ -16,9 +16,21 @@
   "components": [
     { "name": "react", "version": "19.2.0", "purl": "pkg:npm/react@19.2.0" },
     { "name": "react-dom", "version": "19.2.0", "purl": "pkg:npm/react-dom@19.2.0" },
-    { "name": "@tanstack/react-router", "version": "1.170.18", "purl": "pkg:npm/%40tanstack/react-router@1.170.18" },
-    { "name": "@tanstack/react-start", "version": "1.168.32", "purl": "pkg:npm/%40tanstack/react-start@1.168.32" },
-    { "name": "@tanstack/react-query", "version": "5.101.1", "purl": "pkg:npm/%40tanstack/react-query@5.101.1" },
+    {
+      "name": "@tanstack/react-router",
+      "version": "1.170.18",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.18"
+    },
+    {
+      "name": "@tanstack/react-start",
+      "version": "1.168.32",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.32"
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "5.101.1",
+      "purl": "pkg:npm/%40tanstack/react-query@5.101.1"
+    },
     { "name": "firebase", "version": "12.18.0", "purl": "pkg:npm/firebase@12.18.0" },
     { "name": "tailwindcss", "version": "4.2.1", "purl": "pkg:npm/tailwindcss@4.2.1" },
     { "name": "leaflet", "version": "1.9.4", "purl": "pkg:npm/leaflet@1.9.4" },

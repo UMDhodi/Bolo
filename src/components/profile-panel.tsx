@@ -29,12 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import SpinnerToCheck from "@/components/loader";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import { useAuth } from "@/components/auth-context";
@@ -49,7 +44,7 @@ import {
   getFirebaseErrorMessage,
   signOutOfBolo,
   type UserProfile,
-} from "@/lib/firebase";
+} from "@/lib/supabase";
 import { validateStrongPassword } from "@/lib/utils";
 
 // ── Avatar initials helper ──────────────────────────────────────────────────
@@ -75,7 +70,10 @@ const AVATAR_COLORS = [
 function avatarColor(name: string): [string, string] {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return (AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length] ?? ["#7c3aed", "#ede9fe"]) as [string, string];
+  return (AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length] ?? ["#7c3aed", "#ede9fe"]) as [
+    string,
+    string,
+  ];
 }
 
 // ── Stat KPI Card ───────────────────────────────────────────────────────────
@@ -167,7 +165,7 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
       const count = await getUserIssueCount(
         user.uid,
         prof?.displayName ?? user.displayName,
-        prof?.email ?? user.email
+        prof?.email ?? user.email,
       );
       setProfile(prof);
       setIssueCount(count);
@@ -190,9 +188,9 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
     setSaving(true);
     try {
       await updateUserProfile(user.uid, {
-        displayName: editName.trim() || undefined,
-        legalName: editLegal.trim() || undefined,
-        phone: editPhone.trim() || undefined,
+        ...(editName.trim() ? { displayName: editName.trim() } : {}),
+        ...(editLegal.trim() ? { legalName: editLegal.trim() } : {}),
+        ...(editPhone.trim() ? { phone: editPhone.trim() } : {}),
       });
       const updated = await getUserProfile(user.uid);
       setProfile(updated);
@@ -304,7 +302,10 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
   const displayName = profile?.displayName ?? user.displayName;
   const [bgColor, textColor] = avatarColor(displayName);
   const isVerified = Boolean(
-    profile?.verified ?? (user.emailVerified || (user.email && user.email.includes("@")) || (user.phone && user.phone.length > 6))
+    profile?.verified ??
+    (user.emailVerified ||
+      (user.email && user.email.includes("@")) ||
+      (user.phone && user.phone.length > 6)),
   );
 
   // Truncate UID for display e.g. 507764d9-82bc-44b3-aa6e-ef092c...
@@ -477,7 +478,10 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
               </div>
             ) : (
               <div className="flex flex-col gap-3.5 rounded-2xl border border-border bg-card p-4">
-                <InfoRow label={t.profile.legalName} value={profile?.legalName ?? user.displayName} />
+                <InfoRow
+                  label={t.profile.legalName}
+                  value={profile?.legalName ?? user.displayName}
+                />
                 <InfoRow label={t.profile.mobile} value={profile?.phone ?? user.phone ?? "—"} />
                 <InfoRow label={t.profile.email} value={user.email ?? "—"} />
                 <InfoRow label="User ID" value={user.uid} />
@@ -512,7 +516,10 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
               </div>
 
               {passwordExpanded && (
-                <form onSubmit={handlePasswordUpdate} className="flex flex-col gap-2.5 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-200">
+                <form
+                  onSubmit={handlePasswordUpdate}
+                  className="flex flex-col gap-2.5 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-200"
+                >
                   <div>
                     <label className="mb-1 block text-[11px] font-bold text-foreground">
                       New Password
@@ -583,7 +590,9 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
             {/* Privacy & Compliance Actions (GDPR / DPDP) */}
             <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-border/70 bg-secondary/30 p-3.5">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider text-[10px]">Data Privacy & Control</span>
+                <span className="font-semibold uppercase tracking-wider text-[10px]">
+                  Data Privacy & Control
+                </span>
                 <span className="text-[10px] text-muted-foreground">DPDP / GDPR Compliant</span>
               </div>
               <div className="flex gap-2">
@@ -620,7 +629,8 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
           </DialogHeader>
           <div className="space-y-4 text-sm text-muted-foreground pt-1">
             <p>
-              This action will permanently delete your citizen profile, phone records, and authentication account from Bolo Civic Connect.
+              This action will permanently delete your citizen profile, phone records, and
+              authentication account from Bolo Civic Connect.
             </p>
             <p className="text-xs text-destructive/90 font-medium">
               This action is permanent and cannot be undone (Article 17 Right to Erasure).
@@ -639,7 +649,9 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
                 disabled={deletingAccount}
                 className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60"
               >
-                {deletingAccount ? <BSpinnerToCheck size={18} color="#ffffff" bg="#dc2626" /> : null}
+                {deletingAccount ? (
+                  <BSpinnerToCheck size={18} color="#ffffff" bg="#dc2626" />
+                ) : null}
                 {deletingAccount ? "Deleting…" : "Confirm Delete"}
               </button>
             </div>
@@ -659,7 +671,9 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
             <p>Need assistance or have an urgent civic emergency in your neighbourhood?</p>
             <div className="rounded-2xl bg-secondary/50 p-4 text-foreground">
               <p className="font-semibold">Bolo Civic Connect Helpline</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Email: themayankdhodi@gmail.com</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Email: themayankdhodi@gmail.com
+              </p>
               {/* <p className="text-xs text-muted-foreground">Toll Free: 1800-BOLO-CIVIC (9 AM – 6 PM)</p> */}
             </div>
           </div>
@@ -677,15 +691,29 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
           <div className="space-y-3 pt-2 text-sm text-muted-foreground">
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">1. How do I report a civic problem?</p>
-              <p className="text-xs leading-relaxed">Click "Raise an Issue" in the navigation bar. You can upload photos, take a photo directly with your camera, add the location, and submit your report.</p>
+              <p className="text-xs leading-relaxed">
+                Click "Raise an Issue" in the navigation bar. You can upload photos, take a photo
+                directly with your camera, add the location, and submit your report.
+              </p>
             </div>
             <div className="space-y-1.5 pt-2 border-t border-border">
-              <p className="font-semibold text-foreground">2. How are complaint statuses updated?</p>
-              <p className="text-xs leading-relaxed">Issues transition from <strong>Problem Reported</strong> → <strong>Work in Progress</strong> → <strong>Problem Solved</strong> as municipal crews and community leaders take action.</p>
+              <p className="font-semibold text-foreground">
+                2. How are complaint statuses updated?
+              </p>
+              <p className="text-xs leading-relaxed">
+                Issues transition from <strong>Problem Reported</strong> →{" "}
+                <strong>Work in Progress</strong> → <strong>Problem Solved</strong> as municipal
+                crews and community leaders take action.
+              </p>
             </div>
             <div className="space-y-1.5 pt-2 border-t border-border">
-              <p className="font-semibold text-foreground">3. Is my identity visible to the public?</p>
-              <p className="text-xs leading-relaxed">Only your chosen display name is shown on public reports. Your phone number, and account ID remain secure.</p>
+              <p className="font-semibold text-foreground">
+                3. Is my identity visible to the public?
+              </p>
+              <p className="text-xs leading-relaxed">
+                Only your chosen display name is shown on public reports. Your phone number, and
+                account ID remain secure.
+              </p>
             </div>
           </div>
         </DialogContent>
@@ -701,7 +729,10 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
           </DialogHeader>
           <div className="space-y-3 pt-2 text-xs leading-relaxed text-muted-foreground">
             <p>Bolo Civic Connect is a citizen grievance and community engagement platform.</p>
-            <p>Users agree to report genuine civic issues responsibly without uploading abusive, misleading, or private identifiable information on public complaint cards.</p>
+            <p>
+              Users agree to report genuine civic issues responsibly without uploading abusive,
+              misleading, or private identifiable information on public complaint cards.
+            </p>
             <p>Your user profile information is protected and stored securely.</p>
           </div>
         </DialogContent>

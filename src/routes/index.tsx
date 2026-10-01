@@ -1,7 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
-import { ArrowUpRight, CalendarDays, LocateFixed, MapPin, Search, SlidersHorizontal, User, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  LocateFixed,
+  MapPin,
+  Search,
+  SlidersHorizontal,
+  User,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { SiteHeader } from "@/components/site-header";
@@ -29,7 +38,7 @@ import SpinnerToCheck from "@/components/loader";
 import { useAuth } from "@/components/auth-context";
 import { useT } from "@/components/language-context";
 import { isIssueOwner } from "@/lib/utils";
-import { deleteIssue, getFirebaseErrorMessage, subscribeToIssues } from "@/lib/firebase";
+import { deleteIssue, getFirebaseErrorMessage, subscribeToIssues } from "@/lib/supabase";
 import { initAutoLocationDetection, getCachedUserLocation } from "@/lib/location-resolver";
 import {
   INDIA_CENTER,
@@ -109,9 +118,16 @@ function HomePage() {
       if (district !== "all" && i.district !== district) return false;
       if (city !== "all" && i.city !== city) return false;
       if (!q) return true;
-      return [i.city, i.district, i.state, i.location, i.title, i.category, i.reporter, i.description].some((v) =>
-        v ? v.toLowerCase().includes(q) : false
-      );
+      return [
+        i.city,
+        i.district,
+        i.state,
+        i.location,
+        i.title,
+        i.category,
+        i.reporter,
+        i.description,
+      ].some((v) => (v ? v.toLowerCase().includes(q) : false));
     });
   }, [query, state, district, city, issueFilterTab, user, issuesList]);
 
@@ -127,7 +143,7 @@ function HomePage() {
   // Currently selected issue details for map mini sub-legend
   const selectedIssue = useMemo(
     () => issuesList.find((i) => i.id === selectedId) || null,
-    [issuesList, selectedId]
+    [issuesList, selectedId],
   );
 
   // My issues count
@@ -317,8 +333,20 @@ function HomePage() {
 
             {/* Map Container with Sub-legend overlay */}
             <div className="relative z-0 isolate h-[400px] overflow-hidden rounded-2xl border border-border lg:h-auto lg:min-h-[300px] lg:flex-1">
-              <ClientOnly fallback={<div className="flex size-full items-center justify-center"><SpinnerToCheck size={52} color="var(--color-primary)" bg="white" /></div>}>
-                <Suspense fallback={<div className="flex size-full items-center justify-center"><SpinnerToCheck size={52} color="var(--color-primary)" bg="white" /></div>}>
+              <ClientOnly
+                fallback={
+                  <div className="flex size-full items-center justify-center">
+                    <SpinnerToCheck size={52} color="var(--color-primary)" bg="white" />
+                  </div>
+                }
+              >
+                <Suspense
+                  fallback={
+                    <div className="flex size-full items-center justify-center">
+                      <SpinnerToCheck size={52} color="var(--color-primary)" bg="white" />
+                    </div>
+                  }
+                >
                   <IssueMap
                     issues={filteredIssues}
                     selectedId={selectedId}
@@ -498,7 +526,8 @@ function HomePage() {
               Delete Complaint?
             </DialogTitle>
             <DialogDescription className="mt-1 text-sm text-muted-foreground">
-              Are you sure you want to delete &quot;{deletingIssue?.title}&quot;? This action cannot be undone.
+              Are you sure you want to delete &quot;{deletingIssue?.title}&quot;? This action cannot
+              be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-5 flex items-center justify-end gap-3">

@@ -1,6 +1,6 @@
 /**
  * MSG91 Phone OTP Integration Service
- * 
+ *
  * Supports both:
  * 1. Native MSG91 Web SDK (Custom UI via exposeMethods & window.sendOtp / window.verifyOtp)
  * 2. Backend Server Proxy (/api/otp/*)
@@ -13,17 +13,17 @@ declare global {
     sendOtp?: (
       identifier: string,
       success?: (data: unknown) => void,
-      failure?: (err: unknown) => void
+      failure?: (err: unknown) => void,
     ) => void;
     verifyOtp?: (
       otp: string | number,
       success?: (data: unknown) => void,
-      failure?: (err: unknown) => void
+      failure?: (err: unknown) => void,
     ) => void;
     retryOtp?: (
       channel: string | null,
       success?: (data: unknown) => void,
-      failure?: (err: unknown) => void
+      failure?: (err: unknown) => void,
     ) => void;
   }
 }
@@ -167,7 +167,7 @@ export async function sendMsg91Otp(phone: string): Promise<Msg91Response> {
                 ? String(err.message)
                 : "Failed to send OTP via MSG91.";
             reject(new Error(errStr));
-          }
+          },
         );
       });
     }
@@ -237,7 +237,7 @@ export async function verifyMsg91Otp(phone: string, otp: string): Promise<Msg91R
                 ? String(err.message)
                 : "Invalid or expired OTP code.";
             reject(new Error(errStr));
-          }
+          },
         );
       });
     }
@@ -306,7 +306,7 @@ export async function resendMsg91Otp(phone: string): Promise<Msg91Response> {
                 ? String(err.message)
                 : "Failed to resend OTP.";
             reject(new Error(errStr));
-          }
+          },
         );
       });
     }

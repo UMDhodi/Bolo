@@ -1,5 +1,10 @@
 export function renderErrorPage(error?: unknown): string {
-  const errorDetails = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack || ""}` : (error ? String(error) : "");
+  const errorDetails =
+    error instanceof Error
+      ? `${error.name}: ${error.message}\n${error.stack || ""}`
+      : error
+        ? String(error)
+        : "";
   const errorHtml = errorDetails
     ? `<pre style="text-align: left; background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; font-size: 11px; max-height: 180px; overflow: auto; margin-top: 1rem; word-break: break-all; white-space: pre-wrap;">${errorDetails.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`
     : "";

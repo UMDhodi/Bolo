@@ -9,7 +9,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { LanguageProvider } from "../components/language-context";
@@ -17,7 +17,7 @@ import { AuthProvider } from "../components/auth-context";
 import { useAuth } from "../components/auth-context";
 import { Toaster } from "../components/ui/sonner";
 
-
+// ── 404 ───────────────────────────────────────────────────────────────────────
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -40,6 +40,7 @@ function NotFoundComponent() {
   );
 }
 
+// ── Error boundary ────────────────────────────────────────────────────────────
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error("TanStack Router ErrorComponent caught:", error);
   const router = useRouter();
@@ -90,6 +91,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+// ── Route definition ──────────────────────────────────────────────────────────
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
@@ -110,12 +112,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Gabarito:wght@500;600;700;800&family=Nunito+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
@@ -140,6 +143,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+// ── Shell (SSR html wrapper) ──────────────────────────────────────────────────
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
@@ -154,6 +158,7 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+// ── Root component ────────────────────────────────────────────────────────────
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -172,58 +177,117 @@ function RootComponent() {
   );
 }
 
+// ── Splash screen ─────────────────────────────────────────────────────────────
+const MIN_SPLASH_MS = 1500;
+
+function SplashScreen() {
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background"
+      aria-label="Loading Bolo"
+      role="status"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <img src="/logo.png" alt="Bolo logo" className="size-16 animate-pulse object-cover" />
+        <p className="font-display text-2xl font-bold text-foreground">Bolo</p>
+        <p className="text-xs font-semibold text-muted-foreground tracking-wider">
+          Checking your session…
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Session gate: splash → route guard ────────────────────────────────────────
 function SessionGate({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, profileChecked, hasProfile } = useAuth();
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const isNavigatingRef = useRef(false);
 
-  const isCreatingProfile =
-    typeof window !== "undefined" &&
-    window.sessionStorage?.getItem("bolo_is_creating_profile") === "true";
+  // Track whether the minimum splash time has elapsed
+  const [splashDone, setSplashDone] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSplashDone(true), MIN_SPLASH_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show splash until both the min time AND auth check are done
+  const showSplash = !splashDone || loading || !profileChecked;
 
   useEffect(() => {
-    if (loading) return;
-    // Authenticated users on /auth go home unless they are currently filling their profile
-    if (user && pathname === "/auth" && !isCreatingProfile && !isNavigatingRef.current) {
-      isNavigatingRef.current = true;
-      void navigate({ to: "/", replace: true }).finally(() => {
-        isNavigatingRef.current = false;
-      });
-    }
-    // Unauthenticated users on protected routes go to /auth
-    if (!user && pathname !== "/auth" && pathname !== "/waitlist" && !isNavigatingRef.current) {
+    // Wait until splash is fully done before redirecting
+    if (showSplash) return;
+    if (isNavigatingRef.current) return;
+
+    const isPublic = pathname === "/auth" || pathname === "/waitlist";
+    const isCreateProfile = pathname === "/create-profile";
+
+    // ── No session → login ────────────────────────────────────────────────────
+    if (!user && !isPublic) {
       isNavigatingRef.current = true;
       void navigate({ to: "/auth", replace: true }).finally(() => {
         isNavigatingRef.current = false;
       });
+      return;
     }
-  }, [loading, navigate, pathname, user, isCreatingProfile]);
 
-  if (loading) {
+    // ── Session exists, no profile → create-profile ───────────────────────────
+    if (user && !hasProfile && !isCreateProfile && !isPublic) {
+      isNavigatingRef.current = true;
+      void navigate({ to: "/create-profile", replace: true }).finally(() => {
+        isNavigatingRef.current = false;
+      });
+      return;
+    }
+
+    // ── Session + profile on /auth → home ─────────────────────────────────────
+    if (user && hasProfile && pathname === "/auth") {
+      isNavigatingRef.current = true;
+      void navigate({ to: "/", replace: true }).finally(() => {
+        isNavigatingRef.current = false;
+      });
+      return;
+    }
+
+    // ── Session, no profile, on /create-profile → stay ───────────────────────
+    // (allowed, do nothing)
+
+    // ── Session + profile on /create-profile → home ───────────────────────────
+    if (user && hasProfile && isCreateProfile) {
+      isNavigatingRef.current = true;
+      void navigate({ to: "/", replace: true }).finally(() => {
+        isNavigatingRef.current = false;
+      });
+      return;
+    }
+
+    // ── No session on /auth or /waitlist → stay ───────────────────────────────
+    // (allowed, do nothing)
+  }, [showSplash, user, hasProfile, pathname, navigate]);
+
+  // Render splash overlay above everything while checking
+  if (showSplash) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-background px-4">
-        <p className="text-sm font-semibold text-muted-foreground">Checking your Bolo session…</p>
-      </div>
+      <>
+        <SplashScreen />
+        {/* Render children behind the overlay so routes can pre-render */}
+        <div aria-hidden="true" className="invisible">
+          {children}
+        </div>
+      </>
     );
   }
 
-  if (!user && pathname !== "/auth" && pathname !== "/waitlist") {
-    return (
-      <div className="grid min-h-dvh place-items-center bg-background px-4">
-        <p className="text-sm font-semibold text-muted-foreground">Redirecting to sign in…</p>
-      </div>
-    );
-  }
+  // Block rendering until redirect is ready (avoids flash of wrong page)
+  const isPublic = pathname === "/auth" || pathname === "/waitlist";
+  const isCreateProfile = pathname === "/create-profile";
 
-  if (user && pathname === "/auth" && !isCreatingProfile) {
-    return (
-      <div className="grid min-h-dvh place-items-center bg-background px-4">
-        <p className="text-sm font-semibold text-muted-foreground">Redirecting to home…</p>
-      </div>
-    );
-  }
+  if (!user && !isPublic) return null;
+  if (user && !hasProfile && !isCreateProfile) return null;
+  if (user && hasProfile && (pathname === "/auth" || isCreateProfile)) return null;
 
   return <>{children}</>;
 }
-

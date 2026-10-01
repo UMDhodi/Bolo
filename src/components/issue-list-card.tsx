@@ -56,7 +56,9 @@ export function IssueListCard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={issue.status} size="sm" />
-            <span className="text-[11px] font-semibold text-muted-foreground">{issue.category}</span>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {issue.category}
+            </span>
           </div>
 
           {/* Universal Edit/Delete buttons (Visible only on owner's cards) */}

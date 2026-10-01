@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function isIssueOwner(
   issue: Issue | null | undefined,
-  user: BoloUser | null | undefined
+  user: BoloUser | null | undefined,
 ): boolean {
   if (!issue || !user) return false;
 
@@ -39,12 +39,14 @@ export function isIssueOwner(
  */
 export function sanitizeInput(value: unknown, maxLength = 1000): string {
   if (typeof value !== "string") return "";
-  return value
-    .replace(/\0/g, "") // Remove null bytes
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove ASCII control characters except \t and \n
-    .trim()
-    .slice(0, maxLength);
+  return (
+    value
+      .replace(/\0/g, "") // Remove null bytes
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove ASCII control characters except \t and \n
+      .trim()
+      .slice(0, maxLength)
+  );
 }
 
 /**
@@ -241,15 +243,50 @@ const ALLOWED_EXACT_DOMAINS = new Set([
 ]);
 
 const BLOCKED_DOMAINS = new Set([
-  "tempmail.com", "tempmail.net", "tempmail.org", "temp-mail.org", "temp-mail.io",
-  "10minutemail.com", "10minutemail.net", "10minutemail.org",
-  "guerrillamail.com", "guerrillamail.net", "guerrillamail.org", "guerrillamailblock.com", "sharklasers.com", "grr.la",
-  "mailinator.com", "yopmail.com", "yopmail.fr", "yopmail.net",
-  "trashmail.com", "trashmail.net", "trashmail.org", "throwawaymail.com",
-  "getairmail.com", "dispostable.com", "crazymailing.com", "mailcatch.com",
-  "mytemp.email", "mohmal.com", "burnermail.io", "maildrop.cc", "nada.ltd",
-  "fake.com", "test.com", "example.com", "sample.com", "dummy.com", "abc.com", "xyz.com",
-  "foo.com", "bar.com", "asdf.com", "testing.com", "email.com", "nomail.com",
+  "tempmail.com",
+  "tempmail.net",
+  "tempmail.org",
+  "temp-mail.org",
+  "temp-mail.io",
+  "10minutemail.com",
+  "10minutemail.net",
+  "10minutemail.org",
+  "guerrillamail.com",
+  "guerrillamail.net",
+  "guerrillamail.org",
+  "guerrillamailblock.com",
+  "sharklasers.com",
+  "grr.la",
+  "mailinator.com",
+  "yopmail.com",
+  "yopmail.fr",
+  "yopmail.net",
+  "trashmail.com",
+  "trashmail.net",
+  "trashmail.org",
+  "throwawaymail.com",
+  "getairmail.com",
+  "dispostable.com",
+  "crazymailing.com",
+  "mailcatch.com",
+  "mytemp.email",
+  "mohmal.com",
+  "burnermail.io",
+  "maildrop.cc",
+  "nada.ltd",
+  "fake.com",
+  "test.com",
+  "example.com",
+  "sample.com",
+  "dummy.com",
+  "abc.com",
+  "xyz.com",
+  "foo.com",
+  "bar.com",
+  "asdf.com",
+  "testing.com",
+  "email.com",
+  "nomail.com",
 ]);
 
 export function validateEmailDomain(email: string): { valid: boolean; error?: string } {
@@ -269,7 +306,8 @@ export function validateEmailDomain(email: string): { valid: boolean; error?: st
   if (BLOCKED_DOMAINS.has(domain)) {
     return {
       valid: false,
-      error: "Temporary, disposable, or test email domains are not allowed. Please use your genuine email address (Gmail, Outlook, Yahoo, etc.).",
+      error:
+        "Temporary, disposable, or test email domains are not allowed. Please use your genuine email address (Gmail, Outlook, Yahoo, etc.).",
     };
   }
 
@@ -297,6 +335,7 @@ export function validateEmailDomain(email: string): { valid: boolean; error?: st
   // This is an allowlist approach: only trusted providers and known institutional TLDs pass
   return {
     valid: false,
-    error: "Please use a trusted email provider (Gmail, Outlook, Yahoo, iCloud, Proton, etc.). Random or unknown email domains are not accepted.",
+    error:
+      "Please use a trusted email provider (Gmail, Outlook, Yahoo, iCloud, Proton, etc.). Random or unknown email domains are not accepted.",
   };
 }

@@ -60,13 +60,14 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto grid max-w-[1400px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 md:px-8">
-        <Link
-          to="/"
-          className="flex min-w-0 items-center gap-3"
-          aria-label={`${t.brand}`}
-        >
+        <Link to="/" className="flex min-w-0 items-center gap-3" aria-label={`${t.brand}`}>
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl overflow-hidden shadow-soft">
-            <img src="/logo.png" alt="Bolo logo" className="size-10 object-cover" aria-hidden="true" />
+            <img
+              src="/logo.png"
+              alt="Bolo logo"
+              className="size-10 object-cover"
+              aria-hidden="true"
+            />
           </span>
           <span className="min-w-0">
             <span className="block font-display text-2xl leading-none font-bold tracking-tight text-foreground">
@@ -90,7 +91,10 @@ export function SiteHeader() {
           </nav>
           <LanguageSelector />
           {loading ? (
-            <span className="size-11 shrink-0 animate-pulse rounded-full bg-secondary" aria-label="Loading profile" />
+            <span
+              className="size-11 shrink-0 animate-pulse rounded-full bg-secondary"
+              aria-label="Loading profile"
+            />
           ) : user ? (
             <ProfilePanel>
               <button
@@ -102,7 +106,13 @@ export function SiteHeader() {
               </button>
             </ProfilePanel>
           ) : (
-            <Link to="/auth" aria-label="Sign in or create a Bolo account" className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-border bg-accent text-accent-foreground transition-colors hover:border-primary"><UserRound className="size-5" /></Link>
+            <Link
+              to="/auth"
+              aria-label="Sign in or create a Bolo account"
+              className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-border bg-accent text-accent-foreground transition-colors hover:border-primary"
+            >
+              <UserRound className="size-5" />
+            </Link>
           )}
         </div>
       </div>
@@ -127,5 +137,11 @@ export function SiteHeader() {
 }
 
 function avatarInitials(name: string) {
-  return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }

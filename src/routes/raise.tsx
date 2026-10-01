@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
 import { useLanguage, useT } from "@/components/language-context";
-import { getFirebaseErrorMessage, submitIssue } from "@/lib/firebase";
+import { getFirebaseErrorMessage, submitIssue } from "@/lib/supabase";
 import SpinnerToCheck from "@/components/loader";
 import { CameraCaptureDialog } from "@/components/camera-capture-dialog";
 import { initAutoLocationDetection, resolveLocationCoordinates } from "@/lib/location-resolver";
@@ -74,12 +74,16 @@ function RaisePage() {
   const navigate = Route.useNavigate();
   const [fields, setFields] = useState<Fields>(empty);
   const [touched, setTouched] = useState<Partial<Record<keyof Fields, boolean>>>({});
-  const [previews, setPreviews] = useState<{ id: string; url: string; name: string; file: File }[]>([]);
+  const [previews, setPreviews] = useState<{ id: string; url: string; name: string; file: File }[]>(
+    [],
+  );
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [processingFiles, setProcessingFiles] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(
+    null,
+  );
   const [locating, setLocating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const t = useT();
@@ -154,7 +158,10 @@ function RaisePage() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setCoordinates({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setCoordinates({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
         setLocating(false);
         toast.success("Live coordinates attached to this issue.");
       },
@@ -463,9 +470,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 function Req() {
   const t = useT();
-  return (
-    <span className="text-xs font-medium text-muted-foreground">({t.raise.required})</span>
-  );
+  return <span className="text-xs font-medium text-muted-foreground">({t.raise.required})</span>;
 }
 
 function FieldError({ message }: { message?: string | undefined }) {

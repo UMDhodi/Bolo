@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CreateProfileRouteImport } from './routes/create-profile'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as RaiseRouteImport } from './routes/raise'
 import { Route as WaitlistRouteImport } from './routes/waitlist'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateProfileRoute = CreateProfileRouteImport.update({
+  id: '/create-profile',
+  path: '/create-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExploreRoute = ExploreRouteImport.update({
@@ -44,6 +50,7 @@ const WaitlistRoute = WaitlistRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/create-profile': typeof CreateProfileRoute
   '/explore': typeof ExploreRoute
   '/raise': typeof RaiseRoute
   '/waitlist': typeof WaitlistRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/create-profile': typeof CreateProfileRoute
   '/explore': typeof ExploreRoute
   '/raise': typeof RaiseRoute
   '/waitlist': typeof WaitlistRoute
@@ -59,21 +67,31 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/create-profile': typeof CreateProfileRoute
   '/explore': typeof ExploreRoute
   '/raise': typeof RaiseRoute
   '/waitlist': typeof WaitlistRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/explore' | '/raise' | '/waitlist'
+  fullPaths:
+    '/' | '/auth' | '/create-profile' | '/explore' | '/raise' | '/waitlist'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/explore' | '/raise' | '/waitlist'
-  id: '__root__' | '/' | '/auth' | '/explore' | '/raise' | '/waitlist'
+  to: '/' | '/auth' | '/create-profile' | '/explore' | '/raise' | '/waitlist'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/create-profile'
+    | '/explore'
+    | '/raise'
+    | '/waitlist'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  CreateProfileRoute: typeof CreateProfileRoute
   ExploreRoute: typeof ExploreRoute
   RaiseRoute: typeof RaiseRoute
   WaitlistRoute: typeof WaitlistRoute
@@ -93,6 +111,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create-profile': {
+      id: '/create-profile'
+      path: '/create-profile'
+      fullPath: '/create-profile'
+      preLoaderRoute: typeof CreateProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/explore': {
@@ -122,6 +147,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  CreateProfileRoute: CreateProfileRoute,
   ExploreRoute: ExploreRoute,
   RaiseRoute: RaiseRoute,
   WaitlistRoute: WaitlistRoute,

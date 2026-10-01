@@ -53,11 +53,11 @@ function applySecurityHeaders(response: Response, request: Request): Response {
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   headers.set(
     "Permissions-Policy",
-    "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()"
+    "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()",
   );
   headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://verify.msg91.com https://verify.phone91.com https://control.msg91.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cartocdn.com https://*.tile.openstreetmap.org https://control.msg91.com https://api.msg91.com https://verify.msg91.com https://verify.phone91.com https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.firebasestorage.app https://lh3.googleusercontent.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://*.google.com https://verify.msg91.com https://verify.phone91.com; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self';"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://verify.msg91.com https://verify.phone91.com https://control.msg91.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cartocdn.com https://*.tile.openstreetmap.org https://control.msg91.com https://api.msg91.com https://verify.msg91.com https://verify.phone91.com https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.firebasestorage.app https://lh3.googleusercontent.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://*.google.com https://verify.msg91.com https://verify.phone91.com; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self';",
   );
 
   // Strip server fingerprinting headers
@@ -79,7 +79,10 @@ function applySecurityHeaders(response: Response, request: Request): Response {
         headers.set("Access-Control-Allow-Origin", origin);
         headers.set("Access-Control-Allow-Credentials", "true");
         headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        headers.set(
+          "Access-Control-Allow-Headers",
+          "Content-Type, Authorization, X-Requested-With",
+        );
       }
     } catch {
       // Invalid origin URL, ignore
@@ -108,9 +111,7 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
     process.env["MSG91_WIDGET_ID"] ||
     "366879665345393532363737";
   const templateId =
-    process.env["VITE_MSG91_TEMPLATE_ID"] ||
-    process.env["MSG91_TEMPLATE_ID"] ||
-    "";
+    process.env["VITE_MSG91_TEMPLATE_ID"] || process.env["MSG91_TEMPLATE_ID"] || "";
 
   // 1. Send OTP: POST /api/otp/send
   if (url.pathname === "/api/otp/send" && request.method === "POST") {
@@ -151,12 +152,15 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
           type: "success",
           message: `OTP sent to +${formattedMobile} (Sandbox Mode: use code 123456).`,
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     } catch (err: unknown) {
       return new Response(
-        JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Failed to send OTP." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to send OTP.",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   }
@@ -192,18 +196,24 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
       if (cleanOtp === "123456" || cleanOtp === "000000" || cleanOtp.length >= 4) {
         return new Response(
           JSON.stringify({ type: "success", message: "OTP verified successfully (Sandbox Mode)." }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
+          { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
 
       return new Response(
-        JSON.stringify({ type: "error", message: "Invalid OTP code. In sandbox mode, enter 123456." }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          type: "error",
+          message: "Invalid OTP code. In sandbox mode, enter 123456.",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
       );
     } catch (err: unknown) {
       return new Response(
-        JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Failed to verify OTP." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to verify OTP.",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   }
@@ -235,13 +245,19 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
       }
 
       return new Response(
-        JSON.stringify({ type: "success", message: `OTP resent to +${formattedMobile} (Sandbox Mode).` }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          type: "success",
+          message: `OTP resent to +${formattedMobile} (Sandbox Mode).`,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     } catch (err: unknown) {
       return new Response(
-        JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Failed to resend OTP." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to resend OTP.",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   }
@@ -257,7 +273,7 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Accept": "application/json",
+            Accept: "application/json",
           },
           body: JSON.stringify({
             authkey: authKey,
@@ -274,12 +290,15 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
 
       return new Response(
         JSON.stringify({ type: "success", message: "Token verified successfully." }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     } catch (err: unknown) {
       return new Response(
-        JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Failed to verify token." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to verify token.",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   }
@@ -298,7 +317,7 @@ export default {
       headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
       headers.set(
         "Permissions-Policy",
-        "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()"
+        "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()",
       );
 
       if (origin && origin !== "null") {
@@ -310,7 +329,10 @@ export default {
             headers.set("Access-Control-Allow-Origin", origin);
             headers.set("Access-Control-Allow-Credentials", "true");
             headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-            headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+            headers.set(
+              "Access-Control-Allow-Headers",
+              "Content-Type, Authorization, X-Requested-With",
+            );
           }
         } catch {
           // Invalid origin

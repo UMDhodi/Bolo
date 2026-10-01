@@ -14,6 +14,7 @@
 In Indian towns, cities, and villages, civic issues like potholes, open drains, broken streetlights, unattended garbage, and water leaks often go unaddressed due to lack of visibility.
 
 **Bolo** bridges the gap between citizens, municipal authorities, and community champions:
+
 - **Interactive Community Map**: View civic complaints plotted accurately across Indian states, districts, and wards on an interactive Leaflet map.
 - **Multi-Camera & Image Capture**: Citizens can raise issues using live device camera capture or photo gallery upload.
 - **Live Firebase Realtime Database**: Real-time sync of complaints, statuses, and user profiles.
@@ -24,18 +25,18 @@ In Indian towns, cities, and villages, civic issues like potholes, open drains, 
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology |
-|---|---|
-| **AI & Code Generation** | **OpenAI & Codex** |
-| **Frontend Framework** | React 18 + TypeScript |
-| **Routing** | TanStack Router (File-based routing) |
-| **State & Data Fetching** | TanStack Query + React Context |
-| **Styling & Design System** | Tailwind CSS v4 + Radix UI Primitives + OKLCH colors |
-| **Mapping Engine** | React Leaflet + Leaflet GeoJSON + CARTO Tiles |
-| **Backend & Authentication** | Firebase Auth (Email/Password, Google OAuth, Phone OTP) |
-| **Database** | Firebase Realtime Database (with live websocket subscription) |
-| **Icons & Notifications** | Lucide React + Sonner Toasts |
-| **Build & Tooling** | Vite + Bun / Node.js |
+| Layer                        | Technology                                                    |
+| ---------------------------- | ------------------------------------------------------------- |
+| **AI & Code Generation**     | **OpenAI & Codex**                                            |
+| **Frontend Framework**       | React 18 + TypeScript                                         |
+| **Routing**                  | TanStack Router (File-based routing)                          |
+| **State & Data Fetching**    | TanStack Query + React Context                                |
+| **Styling & Design System**  | Tailwind CSS v4 + Radix UI Primitives + OKLCH colors          |
+| **Mapping Engine**           | React Leaflet + Leaflet GeoJSON + CARTO Tiles                 |
+| **Backend & Authentication** | Firebase Auth (Email/Password, Google OAuth, Phone OTP)       |
+| **Database**                 | Firebase Realtime Database (with live websocket subscription) |
+| **Icons & Notifications**    | Lucide React + Sonner Toasts                                  |
+| **Build & Tooling**          | Vite + Bun / Node.js                                          |
 
 ---
 
@@ -85,6 +86,7 @@ Bolo Civic Connect/
 ## ⚡ Key Features
 
 ### 1. 🗺️ Map-Centric Issue Tracker
+
 - India-only bounded map view with custom CARTO basemap.
 - Search by city, town, or landmark.
 - Dynamic filtering by **State**, **District**, and **City**.
@@ -92,11 +94,13 @@ Bolo Civic Connect/
 - Stacking context isolation ensuring modal dialogs render smoothly over map layers.
 
 ### 2. 📝 Issue Reporting with Camera & Geolocation
+
 - **Photo Evidence**: Browse files or use the **"Take Photo"** button for direct camera capture.
 - **Live GPS Capture**: **"Use my live location"** button attaches latitude and longitude coordinates.
 - Multi-field validation with translated error messages in the user's active language.
 
 ### 3. 👤 Citizen Profile & Redressal KPI
+
 - Accessible from the top navbar avatar.
 - Displays **Verified** status badge if email or phone is verified.
 - **KPI Card**: Displays total complaints raised by the logged-in user in real time.
@@ -104,6 +108,7 @@ Bolo Civic Connect/
 - Popup navigation: **Profile**, **Support**, **FAQ**, **Terms of Service**, and **Log out**.
 
 ### 4. 🌐 Multilingual Accessibility
+
 - Full UI translation across **8 major Indian languages**.
 - Reactive `useT()` hook guarantees instant language updates without page reloads.
 
@@ -112,9 +117,11 @@ Bolo Civic Connect/
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 18+ or Bun
 
 ### Installation & Run
+
 ```bash
 # Install dependencies
 npm install
@@ -132,6 +139,7 @@ npm run build
 ---
 
 ## 🔒 Security & Privacy
+
 - Sensitive personal info (email, phone, legal name) is never shown on public complaints.
 - Only the reporter's chosen display name and location details are public.
 - Firebase Database security rules restrict profile updates to authenticated owners.

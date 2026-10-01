@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ImagePlus, Save, Trash2, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import SpinnerToCheck from "@/components/loader";
-import { updateIssue, getFirebaseErrorMessage } from "@/lib/firebase";
+import { updateIssue, getFirebaseErrorMessage } from "@/lib/supabase";
 import type { Issue, IssueStatus } from "@/lib/mock-data";
 
 interface EditIssueDialogProps {
@@ -33,12 +39,7 @@ const CATEGORIES = [
   "Civic Issue",
 ];
 
-export function EditIssueDialog({
-  issue,
-  open,
-  onOpenChange,
-  onUpdated,
-}: EditIssueDialogProps) {
+export function EditIssueDialog({ issue, open, onOpenChange, onUpdated }: EditIssueDialogProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
@@ -221,7 +222,10 @@ export function EditIssueDialog({
             <Label className="mb-1.5 block text-sm font-semibold">Attached Photos</Label>
             <div className="flex flex-wrap items-center gap-3">
               {images.map((img, idx) => (
-                <div key={idx} className="relative size-20 overflow-hidden rounded-xl border border-border">
+                <div
+                  key={idx}
+                  className="relative size-20 overflow-hidden rounded-xl border border-border"
+                >
                   <img src={img} alt="" className="size-full object-cover" />
                   <button
                     type="button"

@@ -20,7 +20,7 @@ import { useAuth } from "@/components/auth-context";
 import { useT } from "@/components/language-context";
 import { formatDate, type Issue } from "@/lib/mock-data";
 import { isIssueOwner } from "@/lib/utils";
-import { deleteIssue, getFirebaseErrorMessage, subscribeToIssues } from "@/lib/firebase";
+import { deleteIssue, getFirebaseErrorMessage, subscribeToIssues } from "@/lib/supabase";
 
 export const Route = createFileRoute("/explore")({
   head: () => ({
@@ -91,8 +91,12 @@ function ExplorePage() {
           </div>
         ) : issues.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-border bg-card p-12 text-center shadow-soft">
-            <p className="font-display text-xl font-bold text-foreground">No civic complaints reported yet</p>
-            <p className="mt-2 text-sm text-muted-foreground">Be the first to report an issue in your area and track its progress in real-time!</p>
+            <p className="font-display text-xl font-bold text-foreground">
+              No civic complaints reported yet
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Be the first to report an issue in your area and track its progress in real-time!
+            </p>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -114,7 +118,11 @@ function ExplorePage() {
                       className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="absolute top-3 left-3">
-                      <StatusBadge status={issue.status} size="sm" className="bg-card/95 backdrop-blur" />
+                      <StatusBadge
+                        status={issue.status}
+                        size="sm"
+                        className="bg-card/95 backdrop-blur"
+                      />
                     </div>
 
                     {isOwner && (
@@ -204,7 +212,8 @@ function ExplorePage() {
               Delete Complaint?
             </DialogTitle>
             <DialogDescription className="mt-1 text-sm text-muted-foreground">
-              Are you sure you want to delete &quot;{deletingIssue?.title}&quot;? This action cannot be undone.
+              Are you sure you want to delete &quot;{deletingIssue?.title}&quot;? This action cannot
+              be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-5 flex items-center justify-end gap-3">

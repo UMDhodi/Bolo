@@ -79,7 +79,8 @@ export const SEED_ISSUES: Issue[] = [
     status: "progress",
     category: "Streetlight",
     location: "Teynampet, Chennai",
-    address: "Service lane beside 88 Anna Salai, opposite Meridian Apartments, Teynampet, Chennai 600018",
+    address:
+      "Service lane beside 88 Anna Salai, opposite Meridian Apartments, Teynampet, Chennai 600018",
     description:
       "Six consecutive poles on the service lane have not lit up since the 29th. The lane is used by night-shift workers walking to the bus stop and by women returning from the hospital nearby. A ward technician visited and confirmed a cable fault at the junction box; replacement work has been marked as underway. Requesting a temporary portable light until the cable is restored.",
     images: [streetlightImg],

@@ -16,10 +16,7 @@ const LanguageContext = createContext<LanguageContextValue>({
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<LanguageCode>("en");
-  const value = useMemo(
-    () => ({ language, setLanguage, t: getT(language) }),
-    [language],
-  );
+  const value = useMemo(() => ({ language, setLanguage, t: getT(language) }), [language]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 

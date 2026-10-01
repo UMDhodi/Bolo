@@ -8,13 +8,13 @@
  */
 
 export const LANGUAGES = [
-  { code: "en", label: "English",  native: "English" },
-  { code: "hi", label: "Hindi",    native: "हिन्दी" },
-  { code: "mr", label: "Marathi",  native: "मराठी" },
-  { code: "bn", label: "Bengali",  native: "বাংলা" },
-  { code: "ta", label: "Tamil",    native: "தமிழ்" },
-  { code: "te", label: "Telugu",   native: "తెలుగు" },
-  { code: "kn", label: "Kannada",  native: "ಕನ್ನಡ" },
+  { code: "en", label: "English", native: "English" },
+  { code: "hi", label: "Hindi", native: "हिन्दी" },
+  { code: "mr", label: "Marathi", native: "मराठी" },
+  { code: "bn", label: "Bengali", native: "বাংলা" },
+  { code: "ta", label: "Tamil", native: "தமிழ்" },
+  { code: "te", label: "Telugu", native: "తెలుగు" },
+  { code: "kn", label: "Kannada", native: "ಕನ್ನಡ" },
   { code: "gu", label: "Gujarati", native: "ગુજરાતી" },
 ] as const;
 
@@ -171,7 +171,8 @@ const en: TranslationDict = {
   },
   raise: {
     title: "Raise an issue",
-    subtitle: "Share what needs attention in your area. Clear photos and details help crews act faster.",
+    subtitle:
+      "Share what needs attention in your area. Clear photos and details help crews act faster.",
     photos: "Photos of the issue",
     photosHint: "Drag & drop images here, or click to browse. JPG or PNG, up to 5 images.",
     browse: "Choose images",
@@ -187,7 +188,8 @@ const en: TranslationDict = {
     address: "Full address",
     addressPlaceholder: "House / street / locality, city, PIN code",
     description: "Detailed description",
-    descriptionPlaceholder: "Describe what you saw, how long it has been like this, and who is affected.",
+    descriptionPlaceholder:
+      "Describe what you saw, how long it has been like this, and who is affected.",
     language: "Language for your report",
     languageHint: "Type in your preferred language — the form accepts Indian-language text.",
     submit: "Submit issue",
@@ -403,7 +405,8 @@ const mr: TranslationDict = {
     address: "पूर्ण पत्ता",
     addressPlaceholder: "घर / रस्ता / परिसर, शहर, पिन कोड",
     description: "सविस्तर वर्णन",
-    descriptionPlaceholder: "तुम्ही काय पाहिले, किती दिवसांपासून आहे आणि कोणाला त्रास आहे ते सांगा।",
+    descriptionPlaceholder:
+      "तुम्ही काय पाहिले, किती दिवसांपासून आहे आणि कोणाला त्रास आहे ते सांगा।",
     language: "तक्रारीची भाषा",
     languageHint: "तुमच्या आवडत्या भाषेत लिहा।",
     submit: "तक्रार सादर करा",
@@ -619,7 +622,8 @@ const ta: TranslationDict = {
     address: "முழு முகவரி",
     addressPlaceholder: "வீடு / தெரு / பகுதி, நகரம், பின் குறியீடு",
     description: "விரிவான விளக்கம்",
-    descriptionPlaceholder: "நீங்கள் என்ன பார்த்தீர்கள், எவ்வளவு காலமாக இருக்கிறது என்று கூறுங்கள்।",
+    descriptionPlaceholder:
+      "நீங்கள் என்ன பார்த்தீர்கள், எவ்வளவு காலமாக இருக்கிறது என்று கூறுங்கள்।",
     language: "அறிக்கையின் மொழி",
     languageHint: "உங்கள் விருப்பமான மொழியில் எழுதுக।",
     submit: "புகாரை சமர்ப்பி",

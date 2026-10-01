@@ -74,9 +74,12 @@ export type NewIssue = {
 const firebaseConfig = {
   apiKey: import.meta.env["VITE_FIREBASE_API_KEY"] || "AIzaSyCvxZOCzHIzVOpDYfffxnKUJmyZbdO6o-0",
   authDomain: import.meta.env["VITE_FIREBASE_AUTH_DOMAIN"] || "bolo-civic-connect.firebaseapp.com",
-  databaseURL: import.meta.env["VITE_FIREBASE_DATABASE_URL"] || "https://bolo-civic-connect-default-rtdb.asia-southeast1.firebasedatabase.app",
+  databaseURL:
+    import.meta.env["VITE_FIREBASE_DATABASE_URL"] ||
+    "https://bolo-civic-connect-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: import.meta.env["VITE_FIREBASE_PROJECT_ID"] || "bolo-civic-connect",
-  storageBucket: import.meta.env["VITE_FIREBASE_STORAGE_BUCKET"] || "bolo-civic-connect.firebasestorage.app",
+  storageBucket:
+    import.meta.env["VITE_FIREBASE_STORAGE_BUCKET"] || "bolo-civic-connect.firebasestorage.app",
   appId: import.meta.env["VITE_FIREBASE_APP_ID"] || "1:68250444341:web:130a5209df8d13b92c877c",
 };
 
@@ -141,7 +144,10 @@ export function subscribeToIssues(callback: (issues: Issue[]) => void): () => vo
         id: item.id || key,
       };
     });
-    list.sort((a, b) => (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()));
+    list.sort(
+      (a, b) =>
+        (b.createdAt || new Date(b.date).getTime()) - (a.createdAt || new Date(a.date).getTime()),
+    );
     return list;
   };
 
@@ -170,7 +176,7 @@ export function subscribeToIssues(callback: (issues: Issue[]) => void): () => vo
     },
     (error) => {
       console.warn("Firebase Realtime Database stream notice:", error);
-    }
+    },
   );
 
   return () => {
@@ -181,13 +187,24 @@ export function subscribeToIssues(callback: (issues: Issue[]) => void): () => vo
 
 function message(error: unknown) {
   if (!(error instanceof Error)) return "Something went wrong. Please try again.";
-  if (error.message.includes("auth/quota-exceeded")) return "Monthly service quota reached (Spark tier limit: 50,000 active users). Please try again later.";
-  if (error.message.includes("auth/too-many-requests")) return "Too many requests. Please wait a moment before trying again.";
-  if (error.message.includes("auth/email-already-in-use")) return "This email is already registered. Try signing in.";
-  if (error.message.includes("auth/invalid-credential") || error.message.includes("auth/user-not-found") || error.message.includes("auth/wrong-password")) return "Email or password is incorrect.";
-  if (error.message.includes("auth/weak-password")) return "Password must be at least 8 characters long with uppercase, lowercase, numbers, and special characters.";
-  if (error.message.includes("auth/invalid-verification-code")) return "Invalid OTP code. Please check and try again.";
-  if (error.message.includes("max-connections") || error.message.includes("connection-limit")) return "Server is experiencing high traffic (maximum 100 simultaneous users reached). Retrying...";
+  if (error.message.includes("auth/quota-exceeded"))
+    return "Monthly service quota reached (Spark tier limit: 50,000 active users). Please try again later.";
+  if (error.message.includes("auth/too-many-requests"))
+    return "Too many requests. Please wait a moment before trying again.";
+  if (error.message.includes("auth/email-already-in-use"))
+    return "This email is already registered. Try signing in.";
+  if (
+    error.message.includes("auth/invalid-credential") ||
+    error.message.includes("auth/user-not-found") ||
+    error.message.includes("auth/wrong-password")
+  )
+    return "Email or password is incorrect.";
+  if (error.message.includes("auth/weak-password"))
+    return "Password must be at least 8 characters long with uppercase, lowercase, numbers, and special characters.";
+  if (error.message.includes("auth/invalid-verification-code"))
+    return "Invalid OTP code. Please check and try again.";
+  if (error.message.includes("max-connections") || error.message.includes("connection-limit"))
+    return "Server is experiencing high traffic (maximum 100 simultaneous users reached). Retrying...";
   return error.message.replace("Firebase: ", "");
 }
 
@@ -208,7 +225,9 @@ export async function signUpWithCredentials(email: string, password: string): Pr
   } catch (err: unknown) {
     const errStr = String(err);
     if (errStr.includes("email-already-in-use")) {
-      throw new Error("This email is already registered. Please sign in instead, or use the 'Forgot password?' link if you've lost access.");
+      throw new Error(
+        "This email is already registered. Please sign in instead, or use the 'Forgot password?' link if you've lost access.",
+      );
     }
     throw err;
   }
@@ -222,7 +241,7 @@ export async function directSignUp(email: string, password: string): Promise<Bol
   const user = await signUpWithCredentials(email, password);
   const cleanEmail = email.trim().toLowerCase();
   const defaultName = cleanEmail.split("@")[0] ?? "Bolo Citizen";
-  
+
   await saveCitizenProfile({
     uid: user.uid,
     displayName: defaultName,
@@ -334,7 +353,9 @@ export async function resendVerificationEmail(): Promise<void> {
   if (auth.currentUser) {
     await sendEmailVerification(auth.currentUser, ACTION_CODE_SETTINGS);
   } else {
-    throw new Error("No active account session found. Please sign in to request a verification email.");
+    throw new Error(
+      "No active account session found. Please sign in to request a verification email.",
+    );
   }
 }
 
@@ -422,7 +443,11 @@ export async function signInWithGoogle() {
       let existingByEmail: UserProfile | null | undefined = null;
       if (credential.user.email) {
         try {
-          const userQuery = query(ref(db, "users"), orderByChild("email"), equalTo(credential.user.email));
+          const userQuery = query(
+            ref(db, "users"),
+            orderByChild("email"),
+            equalTo(credential.user.email),
+          );
           const emailSnap = await get(userQuery);
           if (emailSnap.exists()) {
             const list = Object.values(emailSnap.val() as Record<string, UserProfile>);
@@ -433,7 +458,8 @@ export async function signInWithGoogle() {
         }
       }
 
-      const finalDisplayName = existingByEmail?.displayName || credential.user.displayName || "Bolo citizen";
+      const finalDisplayName =
+        existingByEmail?.displayName || credential.user.displayName || "Bolo citizen";
       if (existingByEmail?.displayName && credential.user) {
         await updateProfile(credential.user, { displayName: existingByEmail.displayName });
       }
@@ -463,11 +489,18 @@ export function createRecaptchaVerifier(containerId: string) {
   });
 }
 
-export async function sendPhoneOTP(phoneNumber: string, appVerifier: RecaptchaVerifier): Promise<ConfirmationResult> {
+export async function sendPhoneOTP(
+  phoneNumber: string,
+  appVerifier: RecaptchaVerifier,
+): Promise<ConfirmationResult> {
   return await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
 }
 
-export async function verifyPhoneOTP(confirmationResult: ConfirmationResult, code: string, displayName?: string) {
+export async function verifyPhoneOTP(
+  confirmationResult: ConfirmationResult,
+  code: string,
+  displayName?: string,
+) {
   const credential = await confirmationResult.confirm(code);
   if (displayName && credential.user) {
     await updateProfile(credential.user, { displayName });
@@ -489,7 +522,9 @@ export async function verifyPhoneOTP(confirmationResult: ConfirmationResult, cod
 }
 
 export async function checkUserExistsByPhone(phoneNumber: string): Promise<UserProfile | null> {
-  const formattedPhone = phoneNumber.startsWith("+91") ? phoneNumber : `+91${phoneNumber.replace(/\D/g, "")}`;
+  const formattedPhone = phoneNumber.startsWith("+91")
+    ? phoneNumber
+    : `+91${phoneNumber.replace(/\D/g, "")}`;
   try {
     const userQuery = query(ref(db, "users"), orderByChild("phone"), equalTo(formattedPhone));
     const snap = await get(userQuery);
@@ -514,7 +549,8 @@ export async function loginOrCreatePhoneUser(input: {
   const finalEmail = sanitizeInput(input.email || "");
 
   // Use a secure synthetic auth account for phone-verified users
-  const syntheticEmail = finalEmail && finalEmail.includes("@") ? finalEmail : `p${cleanDigits}@bolo.internal`;
+  const syntheticEmail =
+    finalEmail && finalEmail.includes("@") ? finalEmail : `p${cleanDigits}@bolo.internal`;
   const syntheticPassword = `Bolo#Phone_${cleanDigits}!91`;
 
   let currentUser: User | null = auth.currentUser;
@@ -527,16 +563,28 @@ export async function loginOrCreatePhoneUser(input: {
     } catch {
       try {
         // If account does not exist, create it
-        const newCred = await createUserWithEmailAndPassword(auth, syntheticEmail, syntheticPassword);
+        const newCred = await createUserWithEmailAndPassword(
+          auth,
+          syntheticEmail,
+          syntheticPassword,
+        );
         currentUser = newCred.user;
       } catch (createErr) {
         // If already in use with user's email, try signing in or fallback to phone synthetic email
         const fallbackEmail = `p${cleanDigits}@bolo.internal`;
         try {
-          const fallbackCred = await signInWithEmailAndPassword(auth, fallbackEmail, syntheticPassword);
+          const fallbackCred = await signInWithEmailAndPassword(
+            auth,
+            fallbackEmail,
+            syntheticPassword,
+          );
           currentUser = fallbackCred.user;
         } catch {
-          const fallbackNew = await createUserWithEmailAndPassword(auth, fallbackEmail, syntheticPassword);
+          const fallbackNew = await createUserWithEmailAndPassword(
+            auth,
+            fallbackEmail,
+            syntheticPassword,
+          );
           currentUser = fallbackNew.user;
         }
       }
@@ -596,11 +644,14 @@ async function validateImageMagicBytes(file: File): Promise<boolean> {
     // JPEG: FF D8 FF
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return true;
     // PNG: 89 50 4E 47
-    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return true;
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
+      return true;
     // WebP / RIFF: 52 49 46 46
-    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return true;
+    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46)
+      return true;
     // GIF: 47 49 46 38
-    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return true;
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38)
+      return true;
 
     return false;
   } catch {
@@ -679,7 +730,7 @@ export async function submitIssue(user: BoloUser, issue: NewIssue): Promise<stri
 
   if (imageUrls.length === 0) {
     imageUrls.push(
-      "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22450%22%20viewBox%3D%220%200%20600%20450%22%3E%3Crect%20width%3D%22600%22%20height%3D%22450%22%20fill%3D%22%23f3f4f6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%239ca3af%22%3ENo%20Image%20Uploaded%3C%2Ftext%3E%3C%2Fsvg%3E"
+      "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22450%22%20viewBox%3D%220%200%20600%20450%22%3E%3Crect%20width%3D%22600%22%20height%3D%22450%22%20fill%3D%22%23f3f4f6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%239ca3af%22%3ENo%20Image%20Uploaded%3C%2Ftext%3E%3C%2Fsvg%3E",
     );
   }
 
@@ -729,7 +780,7 @@ export async function submitIssue(user: BoloUser, issue: NewIssue): Promise<stri
 
 export async function updateIssue(
   issueId: string,
-  updates: Partial<Omit<Issue, "id">> & { newImages?: File[] }
+  updates: Partial<Omit<Issue, "id">> & { newImages?: File[] },
 ): Promise<void> {
   const issueRef = ref(db, `issues/${issueId}`);
   const snap = await get(issueRef);
@@ -740,7 +791,12 @@ export async function updateIssue(
 
   // Authorization & Resource Ownership Check (Prevent IDOR / Horizontal Privilege Escalation)
   const currentUid = auth.currentUser?.uid;
-  if (currentUid && existing.reporterUid && existing.reporterUid !== currentUid && existing.userId !== currentUid) {
+  if (
+    currentUid &&
+    existing.reporterUid &&
+    existing.reporterUid !== currentUid &&
+    existing.userId !== currentUid
+  ) {
     logSecurityEvent({
       eventType: "AUTHORIZATION_FAILURE",
       action: "UPDATE_ISSUE_ATTEMPT",
@@ -791,10 +847,15 @@ export async function updateIssue(
   // Strict Schema Whitelisting & Input Sanitization (Mitigate Mass Assignment - OWASP API3:2023)
   const safePayload: Partial<Issue> = {
     title: updates.title !== undefined ? sanitizeInput(updates.title, 150) : existing.title,
-    description: updates.description !== undefined ? sanitizeInput(updates.description, 4000) : existing.description,
-    location: updates.location !== undefined ? sanitizeInput(updates.location, 200) : existing.location,
+    description:
+      updates.description !== undefined
+        ? sanitizeInput(updates.description, 4000)
+        : existing.description,
+    location:
+      updates.location !== undefined ? sanitizeInput(updates.location, 200) : existing.location,
     address: updates.address !== undefined ? sanitizeInput(updates.address, 300) : existing.address,
-    category: updates.category !== undefined ? sanitizeInput(updates.category, 50) : existing.category,
+    category:
+      updates.category !== undefined ? sanitizeInput(updates.category, 50) : existing.category,
     images: finalImages,
     lat: resolvedLat,
     lng: resolvedLng,
@@ -812,7 +873,12 @@ export async function deleteIssue(issueId: string): Promise<void> {
   if (snap.exists()) {
     const existing = snap.val() as Issue;
     const currentUid = auth.currentUser?.uid;
-    if (currentUid && existing.reporterUid && existing.reporterUid !== currentUid && existing.userId !== currentUid) {
+    if (
+      currentUid &&
+      existing.reporterUid &&
+      existing.reporterUid !== currentUid &&
+      existing.userId !== currentUid
+    ) {
       logSecurityEvent({
         eventType: "AUTHORIZATION_FAILURE",
         action: "DELETE_ISSUE_ATTEMPT",
@@ -847,7 +913,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
       return {
         ...data,
         displayName: data.displayName || auth.currentUser?.displayName || "Bolo citizen",
-        legalName: data.legalName || data.displayName || auth.currentUser?.displayName || "Bolo citizen",
+        legalName:
+          data.legalName || data.displayName || auth.currentUser?.displayName || "Bolo citizen",
         email: data.email || auth.currentUser?.email || null,
         phone: data.phone || auth.currentUser?.phoneNumber || null,
       };
@@ -880,7 +947,11 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 export async function updateUserProfile(
   uid: string,
-  fields: { displayName?: string | undefined; legalName?: string | undefined; phone?: string | undefined },
+  fields: {
+    displayName?: string | undefined;
+    legalName?: string | undefined;
+    phone?: string | undefined;
+  },
 ): Promise<void> {
   const currentUid = auth.currentUser?.uid;
   if (currentUid && currentUid !== uid) {
@@ -904,7 +975,7 @@ export async function updateUserProfile(
 export async function getUserIssueCount(
   uid: string,
   userDisplayName?: string | null,
-  userEmail?: string | null
+  userEmail?: string | null,
 ): Promise<number> {
   try {
     const snap = await get(ref(db, "issues"));
@@ -931,7 +1002,9 @@ export async function getUserIssueCount(
  * Privacy & Compliance: Data Export (GDPR / DPDP Article 20)
  * Exports the complete user profile and reported issues.
  */
-export async function exportUserData(uid: string): Promise<{ profile: UserProfile | null; issues: Issue[] }> {
+export async function exportUserData(
+  uid: string,
+): Promise<{ profile: UserProfile | null; issues: Issue[] }> {
   const profile = await getUserProfile(uid);
   let userIssues: Issue[] = [];
   try {
@@ -977,5 +1050,3 @@ export async function deleteUserAccount(uid: string): Promise<void> {
   // 3. Delete the user authentication record from Firebase Auth
   await deleteUser(current);
 }
-
-

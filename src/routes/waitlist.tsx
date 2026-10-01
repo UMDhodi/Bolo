@@ -71,7 +71,6 @@ function WaitlistPage() {
       {/* Main Card */}
       <section className="my-auto w-full max-w-md py-6">
         <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/95 p-6 shadow-xl backdrop-blur-xl sm:p-8">
-          
           {/* Logo & Civic Badge */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -79,8 +78,12 @@ function WaitlistPage() {
                 <img src="/logo.png" alt="Bolo logo" className="size-11 object-cover" />
               </div>
               <div>
-                <p className="text-[11px] font-bold tracking-wider text-primary uppercase">Civic Connect</p>
-                <h2 className="font-display text-xl font-bold tracking-tight text-foreground">Bolo India</h2>
+                <p className="text-[11px] font-bold tracking-wider text-primary uppercase">
+                  Civic Connect
+                </p>
+                <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
+                  Bolo India
+                </h2>
               </div>
             </div>
 
@@ -101,7 +104,9 @@ function WaitlistPage() {
             </h1>
 
             <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-              Due to unprecedented civic participation and platform resource limits (50,000 active monthly citizens), new account creations are paused. We are expanding server capacity and opening new batches soon.
+              Due to unprecedented civic participation and platform resource limits (50,000 active
+              monthly citizens), new account creations are paused. We are expanding server capacity
+              and opening new batches soon.
             </p>
           </div>
 
@@ -115,7 +120,9 @@ function WaitlistPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="waitlist-name" className="sr-only">Your name</label>
+                  <label htmlFor="waitlist-name" className="sr-only">
+                    Your name
+                  </label>
                   <div className="flex items-center rounded-xl border border-input bg-card px-3 focus-within:ring-2 focus-within:ring-ring">
                     <User className="size-3.5 text-muted-foreground" />
                     <input
@@ -130,7 +137,9 @@ function WaitlistPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="waitlist-email" className="sr-only">Email address</label>
+                  <label htmlFor="waitlist-email" className="sr-only">
+                    Email address
+                  </label>
                   <div className="flex items-center rounded-xl border border-input bg-card px-3 focus-within:ring-2 focus-within:ring-ring">
                     <Mail className="size-3.5 text-muted-foreground" />
                     <input
@@ -158,9 +167,12 @@ function WaitlistPage() {
                 <div className="mx-auto mb-2.5 flex size-10 items-center justify-center rounded-full bg-green-500/10 text-green-600">
                   <CheckCircle2 className="size-5" />
                 </div>
-                <h3 className="font-display text-sm font-bold text-foreground">You're on the priority waitlist!</h3>
+                <h3 className="font-display text-sm font-bold text-foreground">
+                  You're on the priority waitlist!
+                </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  We'll send an invite to <strong className="text-foreground">{email}</strong> as soon as the next batch opens.
+                  We'll send an invite to <strong className="text-foreground">{email}</strong> as
+                  soon as the next batch opens.
                 </p>
               </div>
             )}
@@ -175,7 +187,6 @@ function WaitlistPage() {
               </Link>
             </p>
           </div>
-
         </div>
       </section>
 

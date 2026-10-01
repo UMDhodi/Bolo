@@ -55,11 +55,11 @@ We use **pnpm** as the primary package manager for its:
 
 We chose **TanStack** (Router + Query + Start) as the full-stack framework backbone:
 
-| Package | Purpose |
-|---|---|
+| Package                  | Purpose                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------- |
 | `@tanstack/react-router` | Type-safe, file-based routing with search params, loaders, and code splitting |
-| `@tanstack/react-query` | Async state management, caching, background refetching |
-| `@tanstack/react-start` | SSR framework built on Vite + Nitro — server functions, middleware, streaming |
+| `@tanstack/react-query`  | Async state management, caching, background refetching                        |
+| `@tanstack/react-start`  | SSR framework built on Vite + Nitro — server functions, middleware, streaming |
 
 **Why TanStack over Next.js?**
 
@@ -91,11 +91,11 @@ We chose **TanStack** (Router + Query + Start) as the full-stack framework backb
 
 ## 🔥 Firebase Integration
 
-| Service | Usage |
-|---|---|
-| **Firebase Auth** | Email/password, Google OAuth, Phone OTP (RecaptchaVerifier) |
-| **Realtime Database** | Live issue sync — `onValue` listeners push updates to all clients instantly |
-| **Security Rules** | Database rules in `firebase.database.rules.json` protect all write operations |
+| Service               | Usage                                                                         |
+| --------------------- | ----------------------------------------------------------------------------- |
+| **Firebase Auth**     | Email/password, Google OAuth, Phone OTP (RecaptchaVerifier)                   |
+| **Realtime Database** | Live issue sync — `onValue` listeners push updates to all clients instantly   |
+| **Security Rules**    | Database rules in `firebase.database.rules.json` protect all write operations |
 
 > **Note on API Keys:** Firebase client-side API keys are **public by design** — they identify your project, not authorize access. Security is enforced via Firebase Security Rules on the backend. Never confuse Firebase API keys with secret server credentials.
 
@@ -185,7 +185,7 @@ The project deploys on **Vercel** using Nitro's `vercel` preset:
 ```ts
 // vite.config.ts
 export default defineConfig({
-  nitro: { preset: "vercel" },  // Generates .vercel/output/ for serverless functions
+  nitro: { preset: "vercel" }, // Generates .vercel/output/ for serverless functions
 });
 ```
 
@@ -227,6 +227,6 @@ MIT © [UMDhodi](https://github.com/UMDhodi)
 
 **Built with ❤️ for civic engagement in India**
 
-*Bolo means "Speak" in Hindi — because every civic issue deserves a voice.*
+_Bolo means "Speak" in Hindi — because every civic issue deserves a voice._
 
 </div>

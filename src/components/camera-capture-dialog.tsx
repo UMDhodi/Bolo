@@ -9,11 +9,7 @@ interface CameraCaptureDialogProps {
   onCapture: (file: File) => void;
 }
 
-export function CameraCaptureDialog({
-  open,
-  onOpenChange,
-  onCapture,
-}: CameraCaptureDialogProps) {
+export function CameraCaptureDialog({ open, onOpenChange, onCapture }: CameraCaptureDialogProps) {
   const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -70,7 +66,7 @@ export function CameraCaptureDialog({
           setError(
             err instanceof Error
               ? err.message
-              : "Unable to access camera. Please check permissions."
+              : "Unable to access camera. Please check permissions.",
           );
         }
       } finally {
@@ -118,7 +114,7 @@ export function CameraCaptureDialog({
         }
       },
       "image/jpeg",
-      0.85
+      0.85,
     );
   }
 
@@ -158,20 +154,10 @@ export function CameraCaptureDialog({
               </p>
             </div>
           ) : capturedUrl ? (
-            <img
-              src={capturedUrl}
-              alt="Captured"
-              className="size-full object-cover"
-            />
+            <img src={capturedUrl} alt="Captured" className="size-full object-cover" />
           ) : (
             <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="size-full object-cover"
-              />
+              <video ref={videoRef} autoPlay playsInline muted className="size-full object-cover" />
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white">
                   <RefreshCw className="size-8 animate-spin text-primary" />

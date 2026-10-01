@@ -32,7 +32,8 @@ function sanitizeLogData(obj: Record<string, unknown>): Record<string, unknown> 
       // Mask full email
       if (value.includes("@") && value.includes(".")) {
         const [user, domain] = value.split("@");
-        sanitized[key] = user && user.length > 2 ? `${user[0]}***${user.slice(-1)}@${domain}` : `***@${domain}`;
+        sanitized[key] =
+          user && user.length > 2 ? `${user[0]}***${user.slice(-1)}@${domain}` : `***@${domain}`;
       } else {
         sanitized[key] = value.length > 200 ? value.slice(0, 200) + "..." : value;
       }

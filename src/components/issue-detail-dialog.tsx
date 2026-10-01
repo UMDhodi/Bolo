@@ -32,9 +32,7 @@ export function IssueDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto rounded-3xl border-border bg-card p-0 sm:max-w-5xl"
-      >
+      <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto rounded-3xl border-border bg-card p-0 sm:max-w-5xl">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <div className="bg-secondary/60 p-4">
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
