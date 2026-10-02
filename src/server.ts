@@ -483,7 +483,20 @@ async function handleProfileCreateRoute(request: Request): Promise<Response | nu
   }
 
   try {
-    const client = createClient(supabaseUrl, supabaseKey);
+    const authHeader = request.headers.get("authorization");
+    const client = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      ...(authHeader
+        ? {
+            global: {
+              headers: { Authorization: authHeader },
+            },
+          }
+        : {}),
+    });
     const cleanPhone = phone
       ? phone.startsWith("+91")
         ? phone

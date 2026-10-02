@@ -41,9 +41,11 @@ function NotFoundComponent() {
 }
 
 // ── Error boundary ────────────────────────────────────────────────────────────
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error("TanStack Router ErrorComponent caught:", error);
   const router = useRouter();
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorStack = error instanceof Error ? error.stack : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -59,11 +61,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-left">
             <p className="text-xs font-bold text-destructive">Error Details:</p>
             <p className="mt-1 font-mono text-xs text-destructive break-all">
-              {error.message || String(error)}
+              {errorMessage}
             </p>
-            {error.stack ? (
+            {errorStack ? (
               <pre className="mt-2 max-h-32 overflow-auto font-mono text-[10px] text-muted-foreground">
-                {error.stack}
+                {errorStack}
               </pre>
             ) : null}
           </div>

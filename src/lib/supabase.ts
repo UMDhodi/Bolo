@@ -282,9 +282,15 @@ export async function saveCitizenProfile(input: {
 
   // 1. Try server-side endpoint first (rate-limited via Upstash & validated via Zod)
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
     const res = await fetch("/api/profile/create", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({
         uid: input.uid,
         displayName: cleanDisplayName,
