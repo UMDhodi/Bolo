@@ -218,7 +218,52 @@ export async function signOutOfBolo(): Promise<void> {
 
 // ── Profile helpers ───────────────────────────────────────────────────────────
 
-/** Upsert row in `profiles` table */
+/** Security guard verification: verifies Turnstile token and checks Upstash Redis rate limits */
+export async function verifyAuthGuard(params: {
+  action: "signin" | "signup" | "otp-send" | "otp-verify" | "profile-create";
+  email?: string;
+  phone?: string;
+  userId?: string;
+  turnstileToken?: string;
+}): Promise<void> {
+  try {
+    const res = await fetch("/api/auth/guard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        error?: string;
+        retryAfterSeconds?: number;
+      };
+      if (res.status === 429) {
+        throw new Error(
+          data.message || `Too many attempts. Please try again in ${data.retryAfterSeconds || 60} seconds.`,
+        );
+      }
+      if (res.status === 403) {
+        throw new Error(data.message || "Human verification failed. Please try again.");
+      }
+      throw new Error(data.message || "Security verification failed.");
+    }
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes("Too many") ||
+        err.message.includes("Human verification") ||
+        err.message.includes("Security verification failed"))
+    ) {
+      throw err;
+    }
+    // Network / dev-mode pass-through
+    console.warn("[Security Guard] Pass-through:", err);
+  }
+}
+
+/** Upsert row in `profiles` table with server-side validation & rate-limiting */
 export async function saveCitizenProfile(input: {
   uid: string;
   displayName: string;
@@ -226,6 +271,7 @@ export async function saveCitizenProfile(input: {
   phone?: string | undefined;
   email?: string | undefined;
   avatar_url?: string | undefined;
+  turnstileToken?: string | undefined;
 }): Promise<UserProfile> {
   const cleanDisplayName = sanitizeInput(input.displayName.trim(), 100);
   const cleanPhone = input.phone
@@ -234,6 +280,44 @@ export async function saveCitizenProfile(input: {
       : `+91${input.phone.replace(/\D/g, "")}`
     : null;
 
+  // 1. Try server-side endpoint first (rate-limited via Upstash & validated via Zod)
+  try {
+    const res = await fetch("/api/profile/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: input.uid,
+        displayName: cleanDisplayName,
+        legalName: input.legalName,
+        phone: cleanPhone,
+        email: input.email ?? null,
+        avatar_url: input.avatar_url ?? null,
+        turnstileToken: input.turnstileToken,
+      }),
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as { ok: boolean; profile: UserProfile };
+      return data.profile;
+    }
+
+    if (res.status === 429 || res.status === 403 || res.status === 400) {
+      const errData = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errData.message || "Failed to create profile.");
+    }
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes("Too many") ||
+        err.message.includes("Human verification") ||
+        err.message.includes("characters"))
+    ) {
+      throw err;
+    }
+    console.warn("[Profile] Falling back to direct Supabase client upsert:", err);
+  }
+
+  // 2. Client-side Supabase upsert fallback
   const payload = {
     id: input.uid,
     full_name: cleanDisplayName,
@@ -339,8 +423,47 @@ export async function updateUserProfile(
   if (error) throw new Error(message(error));
 }
 
-/** Avatar upload to Supabase Storage */
+/**
+ * Avatar upload to Cloudflare R2 using pre-signed upload URLs.
+ * Direct-to-R2 upload bypasses server bandwidth and memory limits.
+ * Falls back to Supabase Storage if R2 is not configured.
+ */
 export async function uploadAvatar(uid: string, file: File): Promise<string> {
+  try {
+    const res = await fetch("/api/upload/avatar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: uid,
+        mimeType: file.type || "image/jpeg",
+        bytes: file.size,
+        folder: "avatars",
+      }),
+    });
+
+    if (res.ok) {
+      const ticket = (await res.json()) as { uploadUrl: string; publicUrl: string };
+      const uploadRes = await fetch(ticket.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+
+      if (uploadRes.ok) {
+        return ticket.publicUrl;
+      }
+    } else if (res.status === 429) {
+      const errData = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errData.message || "Upload limit exceeded. Please wait a moment.");
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("limit exceeded")) {
+      throw err;
+    }
+    console.warn("[Upload] R2 signed upload failed, falling back to Supabase Storage:", err);
+  }
+
+  // Fallback to Supabase Storage
   const ext = file.name.split(".").pop() ?? "jpg";
   const path = `${uid}/avatar.${ext}`;
 
@@ -352,6 +475,44 @@ export async function uploadAvatar(uid: string, file: File): Promise<string> {
 
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   return data.publicUrl;
+}
+
+/**
+ * General file upload to Cloudflare R2 using signed PUT URLs.
+ */
+export async function uploadFileToR2(
+  uid: string,
+  file: File,
+  folder: "avatars" | "issues" | "media" = "media",
+): Promise<string> {
+  const res = await fetch("/api/upload/file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: uid,
+      mimeType: file.type || "image/jpeg",
+      bytes: file.size,
+      folder,
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(errData.message || "Failed to obtain signed upload URL.");
+  }
+
+  const ticket = (await res.json()) as { uploadUrl: string; publicUrl: string };
+  const uploadRes = await fetch(ticket.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "image/jpeg" },
+    body: file,
+  });
+
+  if (!uploadRes.ok) {
+    throw new Error("Failed to upload file to Cloudflare R2.");
+  }
+
+  return ticket.publicUrl;
 }
 
 /** Count issues reported by user */

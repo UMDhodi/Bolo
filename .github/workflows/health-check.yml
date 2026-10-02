@@ -1,0 +1,35 @@
+name: Health Check – Keep Supabase Alive
+
+on:
+  # Run every 3 days at 06:00 UTC to prevent the Supabase free-tier auto-pause
+  schedule:
+    - cron: "0 6 */3 * *"
+  # Allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping /api/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Call health endpoint
+        run: |
+          echo "Pinging Bolo health endpoint…"
+          RESPONSE=$(curl -sf --retry 3 --retry-delay 10 \
+            -w "\n%{http_code}" \
+            "${{ secrets.APP_URL }}/api/health")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "Status: $HTTP_CODE"
+          echo "Body: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Health check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ Health check passed."

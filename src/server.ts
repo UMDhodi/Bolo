@@ -3,6 +3,28 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
+// ── New infrastructure services (server-side only) ────────────────────────────
+import { getAvatarUploadTicket } from "./lib/r2";
+import {
+  checkAuthRateLimit,
+  checkOtpSendRateLimit,
+  checkOtpVerifyRateLimit,
+  checkProfileRateLimit,
+  checkUploadRateLimit,
+  getClientIp,
+  tooManyRequestsResponse,
+} from "./lib/redis";
+import { verifyTurnstileToken, turnstileFailedResponse } from "./lib/turnstile";
+import {
+  parseBody,
+  otpSendSchema,
+  otpVerifySchema,
+  avatarUploadRequestSchema,
+  authGuardSchema,
+  profileCreateSchema,
+} from "./lib/zod-schemas";
+import { createClient } from "@supabase/supabase-js";
+
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
@@ -57,7 +79,7 @@ function applySecurityHeaders(response: Response, request: Request): Response {
   );
   headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://verify.msg91.com https://verify.phone91.com https://control.msg91.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cartocdn.com https://*.tile.openstreetmap.org https://control.msg91.com https://api.msg91.com https://verify.msg91.com https://verify.phone91.com https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.firebasestorage.app https://lh3.googleusercontent.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://*.google.com https://verify.msg91.com https://verify.phone91.com; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self';",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://verify.msg91.com https://verify.phone91.com https://control.msg91.com https://challenges.cloudflare.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cartocdn.com https://*.tile.openstreetmap.org https://control.msg91.com https://api.msg91.com https://verify.msg91.com https://verify.phone91.com https://unpkg.com https://*.supabase.co https://challenges.cloudflare.com https://*.r2.cloudflarestorage.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.firebasestorage.app https://lh3.googleusercontent.com https://unpkg.com https://*.supabase.co https://*.r2.cloudflarestorage.com https://*.r2.dev; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://*.google.com https://verify.msg91.com https://verify.phone91.com https://challenges.cloudflare.com; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self';",
   );
 
   // Strip server fingerprinting headers
@@ -306,6 +328,286 @@ async function handleMsg91ApiRoute(request: Request): Promise<Response | null> {
   return null;
 }
 
+// ── /api/upload/avatar & /api/upload/file — generate pre-signed R2 PUT URL ────
+async function handleAvatarUploadRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (
+    (url.pathname !== "/api/upload/avatar" && url.pathname !== "/api/upload/file") ||
+    request.method !== "POST"
+  ) {
+    return null;
+  }
+
+  const ip = getClientIp(request);
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "invalid_json", message: "Request body must be JSON." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const parsed = parseBody(avatarUploadRequestSchema, body);
+  if (!parsed.ok) return parsed.response;
+
+  const { userId, mimeType, bytes, folder } = parsed.data;
+
+  // Rate limit: per user
+  const rl = await checkUploadRateLimit(userId);
+  if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+
+  // IP-level auth rate limit
+  const ipRl = await checkAuthRateLimit(ip);
+  if (!ipRl.allowed) return tooManyRequestsResponse(ipRl.reset);
+
+  try {
+    const ticket = await getAvatarUploadTicket(userId, mimeType, bytes, folder || "avatars");
+    return new Response(JSON.stringify(ticket), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: "upload_ticket_failed",
+        message: err instanceof Error ? err.message : "Failed to generate upload URL.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
+
+// ── /api/auth/guard — server-side rate-limit & Turnstile validation ──────────
+async function handleAuthGuardRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/auth/guard" || request.method !== "POST") return null;
+
+  const ip = getClientIp(request);
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "invalid_json", message: "Request body must be JSON." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const parsed = parseBody(authGuardSchema, body);
+  if (!parsed.ok) return parsed.response;
+
+  const { action, phone, userId, turnstileToken } = parsed.data;
+
+  // 1. Rate limits via Upstash Redis
+  if (action === "signin" || action === "signup") {
+    const rl = await checkAuthRateLimit(ip);
+    if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+  } else if (action === "otp-send") {
+    const targetPhone = phone || "unknown";
+    const rl = await checkOtpSendRateLimit(targetPhone, ip);
+    if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+  } else if (action === "otp-verify") {
+    const targetPhone = phone || "unknown";
+    const rl = await checkOtpVerifyRateLimit(targetPhone);
+    if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+  } else if (action === "profile-create") {
+    const targetUid = userId || ip;
+    const rl = await checkProfileRateLimit(targetUid);
+    if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+  }
+
+  // 2. Turnstile token verification
+  if (turnstileToken) {
+    const ts = await verifyTurnstileToken(turnstileToken, ip);
+    if (!ts.success) return turnstileFailedResponse();
+  }
+
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// ── /api/profile/create — validated, rate-limited server-side profile creation ──
+async function handleProfileCreateRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/profile/create" || request.method !== "POST") return null;
+
+  const ip = getClientIp(request);
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "invalid_json", message: "Request body must be JSON." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const parsed = parseBody(profileCreateSchema, body);
+  if (!parsed.ok) return parsed.response;
+
+  const { uid, displayName, legalName, phone, email, avatar_url, turnstileToken } = parsed.data;
+
+  // Rate limiting (per user + per IP)
+  const [userRl, ipRl] = await Promise.all([
+    checkProfileRateLimit(uid),
+    checkAuthRateLimit(ip),
+  ]);
+  if (!userRl.allowed) return tooManyRequestsResponse(userRl.reset);
+  if (!ipRl.allowed) return tooManyRequestsResponse(ipRl.reset);
+
+  // Turnstile verification
+  if (turnstileToken) {
+    const ts = await verifyTurnstileToken(turnstileToken, ip);
+    if (!ts.success) return turnstileFailedResponse();
+  }
+
+  // Supabase pooler / service-role server-side client
+  const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const supabaseKey =
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] ??
+    process.env["VITE_SUPABASE_ANON_KEY"] ??
+    process.env["SUPABASE_ANON_KEY"];
+
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(
+      JSON.stringify({ error: "db_error", message: "Supabase connection not configured." }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  try {
+    const client = createClient(supabaseUrl, supabaseKey);
+    const cleanPhone = phone
+      ? phone.startsWith("+91")
+        ? phone
+        : `+91${phone.replace(/\D/g, "")}`
+      : null;
+
+    const payload = {
+      id: uid,
+      full_name: displayName,
+      phone: cleanPhone,
+      avatar_url: avatar_url ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await client.from("profiles").upsert(payload, { onConflict: "id" });
+    if (error) throw error;
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        profile: {
+          uid,
+          displayName,
+          legalName: legalName || displayName,
+          phone: cleanPhone,
+          email: email ?? null,
+          role: "citizen",
+          createdAt: Date.now(),
+          avatar_url: avatar_url ?? null,
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: "db_error",
+        message: err instanceof Error ? err.message : "Failed to create profile.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
+
+// ── /api/health — lightweight DB ping to prevent Supabase free-tier pause ────
+async function handleHealthRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/health" || request.method !== "GET") return null;
+
+  const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const supabaseKey = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["VITE_SUPABASE_ANON_KEY"];
+
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(
+      JSON.stringify({ status: "degraded", message: "Supabase not configured." }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  try {
+    const client = createClient(supabaseUrl, supabaseKey);
+    // Minimal query — just checks the DB is reachable
+    const { error } = await client.from("profiles").select("id").limit(1);
+    if (error) throw error;
+    return new Response(
+      JSON.stringify({ status: "ok", ts: new Date().toISOString() }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        status: "error",
+        message: err instanceof Error ? err.message : "DB check failed.",
+      }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
+
+// ── Rate-limit + Turnstile wrapper for existing OTP routes ───────────────────
+async function handleOtpRouteWithGuards(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/api/otp/")) return null;
+
+  // Only guard send + verify with Turnstile (retry doesn't require a new challenge)
+  const ip = getClientIp(request);
+  let body: Record<string, unknown> = {};
+
+  // Clone so the original request can be re-read by handleMsg91ApiRoute
+  const cloned = request.clone();
+  try {
+    body = (await cloned.json()) as Record<string, unknown>;
+  } catch {
+    // Non-JSON body — pass through to the real handler
+    return null;
+  }
+
+  if (url.pathname === "/api/otp/send" && request.method === "POST") {
+    const parsed = parseBody(otpSendSchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const rl = await checkOtpSendRateLimit(parsed.data.phone, ip);
+    if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+
+    const ts = await verifyTurnstileToken(parsed.data.turnstileToken, ip);
+    if (!ts.success) return turnstileFailedResponse();
+
+    // Guards passed — fall through to the real MSG91 handler
+    return null;
+  }
+
+  if (url.pathname === "/api/otp/verify" && request.method === "POST") {
+    const parsed = parseBody(otpVerifySchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const rl = await checkOtpVerifyRateLimit(parsed.data.phone);
+    if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+
+    const ts = await verifyTurnstileToken(parsed.data.turnstileToken, ip);
+    if (!ts.success) return turnstileFailedResponse();
+
+    return null;
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     if (request.method === "OPTIONS") {
@@ -339,6 +641,36 @@ export default {
         }
       }
       return new Response(null, { status: 204, headers });
+    }
+
+    // ── /api/health — DB liveness ping ──────────────────────────────────────
+    const healthResponse = await handleHealthRoute(request);
+    if (healthResponse) {
+      return applySecurityHeaders(healthResponse, request);
+    }
+
+    // ── /api/auth/guard — rate limiting + Turnstile verification ────────────
+    const authGuardResponse = await handleAuthGuardRoute(request);
+    if (authGuardResponse) {
+      return applySecurityHeaders(authGuardResponse, request);
+    }
+
+    // ── /api/profile/create — validated + rate-limited server profile creation ──
+    const profileResponse = await handleProfileCreateRoute(request);
+    if (profileResponse) {
+      return applySecurityHeaders(profileResponse, request);
+    }
+
+    // ── /api/upload/avatar & /api/upload/file — signed R2 upload URL ─────────
+    const uploadResponse = await handleAvatarUploadRoute(request);
+    if (uploadResponse) {
+      return applySecurityHeaders(uploadResponse, request);
+    }
+
+    // ── OTP guards (rate limit + Turnstile) before MSG91 handler ────────────
+    const otpGuardResponse = await handleOtpRouteWithGuards(request);
+    if (otpGuardResponse) {
+      return applySecurityHeaders(otpGuardResponse, request);
     }
 
     // Direct backend routing for MSG91 OTP requests (Eliminates browser CORS blocks)

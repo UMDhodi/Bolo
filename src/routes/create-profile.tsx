@@ -8,11 +8,12 @@
  * On submit: upserts the profile row → navigates to "/"
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { User as UserIcon, Phone, ArrowRight, ImagePlus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
+import { TurnstileWidget, type TurnstileRef } from "@/components/turnstile";
 import { saveCitizenProfile, uploadAvatar, getFirebaseErrorMessage } from "@/lib/supabase";
 import { validateIndianPhone } from "@/lib/msg91";
 
@@ -34,6 +35,8 @@ function CreateProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileRef = useRef<TurnstileRef>(null);
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -89,6 +92,7 @@ function CreateProfilePage() {
         ...(cleanPhone ? { phone: cleanPhone } : {}),
         ...(user.email ? { email: user.email } : {}),
         ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        turnstileToken,
       });
 
       void navigate({ to: "/", replace: true });
@@ -226,6 +230,12 @@ function CreateProfilePage() {
               {error}
             </p>
           )}
+
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={(token) => setTurnstileToken(token)}
+            action="profile-create"
+          />
 
           {/* Submit */}
           <button

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import {
   MapPin,
   Sparkles,
@@ -19,6 +19,7 @@ import {
 import civicIllustration from "@/assets/bolo-auth-civic-india.png";
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
+import { TurnstileWidget, type TurnstileRef } from "@/components/turnstile";
 import {
   signUpWithCredentials,
   saveCitizenProfile,
@@ -30,6 +31,7 @@ import {
   verifyPhoneOTP,
   sendPasswordResetLink,
   profileExists,
+  verifyAuthGuard,
 } from "@/lib/supabase";
 import { validateStrongPassword, validateEmailDomain } from "@/lib/utils";
 import { validateIndianPhone } from "@/lib/msg91";
@@ -123,6 +125,10 @@ function AuthPage() {
   const [googlePending, setGooglePending] = useState(false);
   const [applePending, setApplePending] = useState(false);
   const [resetPending, setResetPending] = useState(false);
+
+  // Cloudflare Turnstile token & ref
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+  const turnstileRef = useRef<TurnstileRef>(null);
 
   // True while Supabase is exchanging an OAuth code from the URL
   const [oauthExchanging, setOauthExchanging] = useState(false);
@@ -226,6 +232,8 @@ function AuthPage() {
     setPhoneOtpCode("");
     setPhoneTimer(30);
     setCanResendPhone(false);
+    setTurnstileToken("");
+    turnstileRef.current?.reset();
   };
 
   // Google OAuth
@@ -266,12 +274,16 @@ function AuthPage() {
     setPhonePending(true);
     try {
       const full = clean.startsWith("+91") ? clean : `+91${clean.replace(/\D/g, "")}`;
+      await verifyAuthGuard({ action: "otp-send", phone: full, turnstileToken });
       await sendPhoneOTP(full);
       setPhoneOtpSent(true);
       setPhoneTimer(30);
       setCanResendPhone(false);
+      setTurnstileToken("");
+      turnstileRef.current?.reset();
     } catch (err) {
       setError(getFirebaseErrorMessage(err));
+      turnstileRef.current?.reset();
     } finally {
       setPhonePending(false);
     }
@@ -288,6 +300,7 @@ function AuthPage() {
     try {
       const clean = phoneAuthNumber.trim();
       const full = clean.startsWith("+91") ? clean : `+91${clean.replace(/\D/g, "")}`;
+      await verifyAuthGuard({ action: "otp-verify", phone: full, turnstileToken });
       const loggedUser = await verifyPhoneOTP(full, phoneOtpCode.trim());
       const hasProf = await profileExists(loggedUser.uid);
       if (hasProf) {
@@ -297,6 +310,7 @@ function AuthPage() {
       }
     } catch (err) {
       setError(getFirebaseErrorMessage(err));
+      turnstileRef.current?.reset();
     } finally {
       setPhonePending(false);
     }
@@ -357,10 +371,12 @@ function AuthPage() {
     if (mode === "signin") {
       setAuthPending(true);
       try {
+        await verifyAuthGuard({ action: "signin", email: email.trim(), turnstileToken });
         await signInToBolo(email.trim(), password);
         // SessionGate will redirect once onAuthStateChange fires
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
+        turnstileRef.current?.reset();
       } finally {
         setAuthPending(false);
       }
@@ -395,6 +411,7 @@ function AuthPage() {
 
       setAuthPending(true);
       try {
+        await verifyAuthGuard({ action: "signup", email: cleanEmail, turnstileToken });
         const createdUser = await signUpWithCredentials(cleanEmail, password);
         setCreatedUid(createdUser.uid);
 
@@ -406,6 +423,7 @@ function AuthPage() {
           }
         }
         setSignupStep("profile");
+        turnstileRef.current?.reset();
       } catch (nextError) {
         const errStr = (
           nextError instanceof Error ? nextError.message : String(nextError)
@@ -419,6 +437,7 @@ function AuthPage() {
         } else {
           setError(getFirebaseErrorMessage(nextError));
         }
+        turnstileRef.current?.reset();
       } finally {
         setAuthPending(false);
       }
@@ -459,12 +478,14 @@ function AuthPage() {
           legalName: cleanName,
           ...(cleanPhone ? { phone: cleanPhone } : {}),
           email: email.trim().toLowerCase(),
+          turnstileToken,
         });
 
         // SessionGate will pick up hasProfile === true and redirect to "/"
         void navigate({ to: "/" });
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
+        turnstileRef.current?.reset();
       } finally {
         setAuthPending(false);
       }
@@ -801,6 +822,12 @@ function AuthPage() {
                       </p>
                     )}
 
+                    <TurnstileWidget
+                      ref={turnstileRef}
+                      onVerify={(token) => setTurnstileToken(token)}
+                      action="phone-otp-send"
+                    />
+
                     <button
                       type="submit"
                       disabled={phonePending || !phoneAuthNumber.trim()}
@@ -896,6 +923,12 @@ function AuthPage() {
                         {error}
                       </p>
                     )}
+
+                    <TurnstileWidget
+                      ref={turnstileRef}
+                      onVerify={(token) => setTurnstileToken(token)}
+                      action="phone-otp-verify"
+                    />
 
                     <button
                       type="submit"
@@ -1141,6 +1174,12 @@ function AuthPage() {
                     {error}
                   </p>
                 )}
+
+                <TurnstileWidget
+                  ref={turnstileRef}
+                  onVerify={(token) => setTurnstileToken(token)}
+                  action={mode}
+                />
 
                 {/* Submit Button */}
                 <button
