@@ -13,6 +13,9 @@ import {
   checkUploadRateLimit,
   getClientIp,
   tooManyRequestsResponse,
+  cacheGet,
+  cacheSet,
+  cacheDel,
 } from "./lib/redis";
 import { verifyTurnstileToken, turnstileFailedResponse } from "./lib/turnstile";
 import {
@@ -498,19 +501,28 @@ async function handleProfileCreateRoute(request: Request): Promise<Response | nu
     const { error } = await client.from("profiles").upsert(payload, { onConflict: "id" });
     if (error) throw error;
 
+    const profileData = {
+      uid,
+      displayName,
+      legalName: legalName || displayName,
+      phone: cleanPhone,
+      email: email ?? null,
+      role: "citizen",
+      createdAt: Date.now(),
+      avatar_url: avatar_url ?? null,
+    };
+
+    // Cache profile in Upstash Redis to speed up future reads and reduce Supabase load
+    try {
+      await cacheSet(`profile:${uid}`, JSON.stringify(profileData));
+    } catch {
+      // Redis optional cache failure shouldn't block the request
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,
-        profile: {
-          uid,
-          displayName,
-          legalName: legalName || displayName,
-          phone: cleanPhone,
-          email: email ?? null,
-          role: "citizen",
-          createdAt: Date.now(),
-          avatar_url: avatar_url ?? null,
-        },
+        profile: profileData,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
@@ -525,10 +537,117 @@ async function handleProfileCreateRoute(request: Request): Promise<Response | nu
   }
 }
 
+// ── /api/profile/get — read profile with Upstash Redis cache ahead of Supabase ──
+async function handleProfileGetRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/api/profile/get/") || request.method !== "GET") return null;
+
+  const uid = url.pathname.replace("/api/profile/get/", "").trim();
+  if (!uid) return null;
+
+  // 1. Try Upstash Redis cache first (sub-millisecond, zero Supabase queries)
+  try {
+    const cached = await cacheGet(`profile:${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return new Response(JSON.stringify({ ok: true, profile: parsed, fromCache: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+  } catch {
+    // Redis miss or error, fallback to Supabase
+  }
+
+  // 2. Query Supabase
+  const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const supabaseKey =
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] ??
+    process.env["VITE_SUPABASE_ANON_KEY"] ??
+    process.env["SUPABASE_ANON_KEY"];
+
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(
+      JSON.stringify({ error: "db_not_configured", message: "Supabase not configured." }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  try {
+    const client = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await client.from("profiles").select("*").eq("id", uid).maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      return new Response(
+        JSON.stringify({ ok: false, profile: null }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const row = data as Record<string, unknown>;
+    const profile = {
+      uid: row["id"] as string,
+      displayName: (row["full_name"] as string | undefined) ?? "Bolo citizen",
+      legalName: (row["full_name"] as string | undefined) ?? undefined,
+      phone: (row["phone"] as string | undefined) ?? undefined,
+      avatar_url: (row["avatar_url"] as string | undefined) ?? undefined,
+      createdAt: row["created_at"] ? new Date(row["created_at"] as string).getTime() : Date.now(),
+    };
+
+    // Store in Upstash Redis cache (5 minutes TTL)
+    try {
+      await cacheSet(`profile:${uid}`, JSON.stringify(profile));
+    } catch {}
+
+    return new Response(
+      JSON.stringify({ ok: true, profile, fromCache: false }),
+      { status: 200, headers: { "Content-Type": "application/json", "X-Cache": "MISS" } },
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: "db_error", message: err instanceof Error ? err.message : "Failed to load profile." }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
+
+// ── /api/profile/invalidate — invalidate cached profile on update ───────────
+async function handleProfileInvalidateRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/profile/invalidate" || request.method !== "POST") return null;
+
+  try {
+    const body = (await request.json()) as { uid?: string };
+    if (body.uid) {
+      await cacheDel(`profile:${body.uid}`);
+    }
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return new Response(JSON.stringify({ ok: false }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
 // ── /api/health — lightweight DB ping to prevent Supabase free-tier pause ────
 async function handleHealthRoute(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname !== "/api/health" || request.method !== "GET") return null;
+
+  // 1. Check Redis for a cached health ping (prevents spamming Supabase within 30s)
+  try {
+    const cachedHealth = await cacheGet("health:ping");
+    if (cachedHealth) {
+      return new Response(cachedHealth, {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+  } catch {}
 
   const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
   const supabaseKey = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["VITE_SUPABASE_ANON_KEY"];
@@ -545,10 +664,25 @@ async function handleHealthRoute(request: Request): Promise<Response | null> {
     // Minimal query — just checks the DB is reachable
     const { error } = await client.from("profiles").select("id").limit(1);
     if (error) throw error;
-    return new Response(
-      JSON.stringify({ status: "ok", ts: new Date().toISOString() }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
+
+    const payload = JSON.stringify({
+      status: "ok",
+      ts: new Date().toISOString(),
+      services: {
+        supabase: "connected",
+        redis: "active",
+      },
+    });
+
+    // Cache health result for 30s in Redis
+    try {
+      await cacheSet("health:ping", payload);
+    } catch {}
+
+    return new Response(payload, {
+      status: 200,
+      headers: { "Content-Type": "application/json", "X-Cache": "MISS" },
+    });
   } catch (err) {
     return new Response(
       JSON.stringify({
@@ -659,6 +793,18 @@ export default {
     const profileResponse = await handleProfileCreateRoute(request);
     if (profileResponse) {
       return applySecurityHeaders(profileResponse, request);
+    }
+
+    // ── /api/profile/get — Redis-cached profile lookup ───────────────────────
+    const profileGetResponse = await handleProfileGetRoute(request);
+    if (profileGetResponse) {
+      return applySecurityHeaders(profileGetResponse, request);
+    }
+
+    // ── /api/profile/invalidate — invalidate profile cache on mutation ──────
+    const profileInvalidateResponse = await handleProfileInvalidateRoute(request);
+    if (profileInvalidateResponse) {
+      return applySecurityHeaders(profileInvalidateResponse, request);
     }
 
     // ── /api/upload/avatar & /api/upload/file — signed R2 upload URL ─────────

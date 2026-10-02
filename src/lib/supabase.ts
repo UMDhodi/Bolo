@@ -344,8 +344,22 @@ export async function saveCitizenProfile(input: {
   };
 }
 
-/** Fetch profile row */
+/** Fetch profile row (checks Upstash Redis cache first for sub-millisecond response) */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  // 1. Try server-side Redis cache endpoint first
+  try {
+    const res = await fetch(`/api/profile/get/${encodeURIComponent(uid)}`);
+    if (res.ok) {
+      const data = (await res.json()) as { ok: boolean; profile: UserProfile | null };
+      if (data.ok && data.profile) {
+        return data.profile;
+      }
+    }
+  } catch {
+    // Non-blocking fallback to client-side Supabase
+  }
+
+  // 2. Direct Supabase query fallback
   const { data, error } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
 
   if (error) {
@@ -388,7 +402,7 @@ export async function profileExists(uid: string): Promise<boolean> {
   return data !== null;
 }
 
-/** Update profile fields (IDOR-guarded) */
+/** Update profile fields (IDOR-guarded + invalidates Upstash Redis cache) */
 export async function updateUserProfile(
   uid: string,
   fields: {
@@ -421,6 +435,17 @@ export async function updateUserProfile(
   const { error } = await supabase.from("profiles").update(payload).eq("id", uid);
 
   if (error) throw new Error(message(error));
+
+  // Invalidate Upstash Redis cache so fresh profile is fetched next time
+  try {
+    void fetch("/api/profile/invalidate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid }),
+    });
+  } catch {
+    // Non-blocking
+  }
 }
 
 /**
