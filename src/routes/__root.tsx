@@ -245,10 +245,10 @@ function SessionGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    // ── Session + profile on /auth → home ─────────────────────────────────────
-    if (user && hasProfile && pathname === "/auth") {
+    // ── Session on /auth → home (if profile exists) or create-profile ─────────
+    if (user && pathname === "/auth") {
       isNavigatingRef.current = true;
-      void navigate({ to: "/", replace: true }).finally(() => {
+      void navigate({ to: hasProfile ? "/" : "/create-profile", replace: true }).finally(() => {
         isNavigatingRef.current = false;
       });
       return;

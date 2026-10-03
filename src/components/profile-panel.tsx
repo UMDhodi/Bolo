@@ -19,6 +19,7 @@ import {
   KeyRound,
   ChevronDown,
   ChevronUp,
+  Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,6 +44,7 @@ import {
   deleteUserAccount,
   getFirebaseErrorMessage,
   signOutOfBolo,
+  uploadAvatar,
   type UserProfile,
 } from "@/lib/supabase";
 import { validateStrongPassword } from "@/lib/utils";
@@ -134,7 +136,7 @@ function EditField({
 
 // ── Main ProfilePanel (Dropdown Menu matching design + Dialog for Details) ──
 export function ProfilePanel({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile: contextProfile, setProfile: setContextProfile } = useAuth();
   const t = useT();
 
   // Modals state
@@ -148,6 +150,7 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
   const [issueCount, setIssueCount] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
 
   // Edit form state
@@ -193,13 +196,40 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
         ...(editPhone.trim() ? { phone: editPhone.trim() } : {}),
       });
       const updated = await getUserProfile(user.uid);
-      setProfile(updated);
+      if (updated) {
+        setProfile(updated);
+        setContextProfile(updated);
+      }
       setEditing(false);
       toast.success(t.profile.editSuccess);
     } catch (err) {
       toast.error(getFirebaseErrorMessage(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Profile picture must be under 5 MB.");
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const publicUrl = await uploadAvatar(user.uid, file);
+      await updateUserProfile(user.uid, { avatarUrl: publicUrl });
+      const updated = await getUserProfile(user.uid);
+      if (updated) {
+        setProfile(updated);
+        setContextProfile(updated);
+      }
+      toast.success("Profile picture updated!");
+    } catch (err) {
+      toast.error(getFirebaseErrorMessage(err));
+    } finally {
+      setUploadingAvatar(false);
     }
   }
 
@@ -299,7 +329,13 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
 
   if (!user) return <>{children}</>;
 
-  const displayName = profile?.displayName ?? user.displayName;
+  const displayName = profile?.displayName ?? contextProfile?.displayName ?? user.displayName;
+  const effectiveAvatar =
+    profile?.avatarUrl ||
+    profile?.avatar_url ||
+    contextProfile?.avatarUrl ||
+    contextProfile?.avatar_url ||
+    user.avatarUrl;
   const [bgColor, textColor] = avatarColor(displayName);
   const isVerified = Boolean(
     profile?.verified ??
@@ -322,6 +358,26 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
           sideOffset={8}
           className="w-72 rounded-2xl border border-border bg-card p-2 shadow-xl animate-in fade-in-50 zoom-in-95"
         >
+          {/* Top user summary with avatar */}
+          <div className="flex items-center gap-3 rounded-xl bg-secondary/40 p-2.5 mb-1">
+            <div
+              className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full border border-border text-xs font-bold"
+              style={{ backgroundColor: bgColor, color: textColor }}
+            >
+              {effectiveAvatar ? (
+                <img src={effectiveAvatar} alt={displayName} className="size-full object-cover" />
+              ) : (
+                <span>{avatarInitials(displayName)}</span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-foreground">{displayName}</p>
+              <p className="truncate text-[10px] text-muted-foreground">{user.email || user.phone}</p>
+            </div>
+          </div>
+
+          <DropdownMenuSeparator className="my-1 bg-border/60" />
+
           {/* Item: Profile */}
           <DropdownMenuItem
             onSelect={() => setProfileDialogOpen(true)}
@@ -377,13 +433,43 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
 
           {/* Avatar & Verification Banner */}
           <div className="flex items-center gap-4 rounded-2xl bg-secondary/50 p-4">
-            <div
-              className="flex size-14 shrink-0 items-center justify-center rounded-full text-lg font-bold shadow-md"
-              style={{ backgroundColor: bgColor, color: textColor }}
-              aria-hidden="true"
-            >
-              {avatarInitials(displayName)}
+            <div className="relative group shrink-0">
+              <div
+                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold shadow-md border-2 border-border"
+                style={{ backgroundColor: bgColor, color: textColor }}
+                aria-hidden="true"
+              >
+                {effectiveAvatar ? (
+                  <img
+                    src={effectiveAvatar}
+                    alt={displayName}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <span>{avatarInitials(displayName)}</span>
+                )}
+              </div>
+              <label
+                htmlFor="profile-panel-avatar-input"
+                title="Change profile photo"
+                className="absolute -bottom-1 -right-1 grid size-7 cursor-pointer place-items-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-110 active:scale-95"
+              >
+                {uploadingAvatar ? (
+                  <SpinnerToCheck size={14} color="#ffffff" bg="#0f766e" />
+                ) : (
+                  <Camera className="size-3.5" />
+                )}
+                <input
+                  id="profile-panel-avatar-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={uploadingAvatar}
+                  onChange={handleAvatarUpload}
+                />
+              </label>
             </div>
+
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="truncate font-display text-base font-bold text-foreground">
@@ -408,6 +494,12 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <p className="truncate text-xs text-muted-foreground">{user.email || user.phone}</p>
+              <label
+                htmlFor="profile-panel-avatar-input"
+                className="mt-1 inline-block cursor-pointer text-[11px] font-semibold text-primary hover:underline"
+              >
+                {effectiveAvatar ? "Change photo" : "Upload photo"}
+              </label>
             </div>
           </div>
 

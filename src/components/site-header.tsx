@@ -48,7 +48,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
 }
 
 export function SiteHeader() {
-  const { user, loading } = useAuth();
+  const { user, loading, profile } = useAuth();
   const t = useT();
 
   const links = [
@@ -100,9 +100,19 @@ export function SiteHeader() {
               <button
                 type="button"
                 aria-label={t.nav.profile}
-                className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-border bg-accent font-display text-sm font-bold text-accent-foreground transition-colors hover:border-primary"
+                className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-border bg-accent transition-colors hover:border-primary"
               >
-                {avatarInitials(user.displayName)}
+                {profile?.avatarUrl || profile?.avatar_url || user.avatarUrl ? (
+                  <img
+                    src={profile?.avatarUrl || profile?.avatar_url || user.avatarUrl || ""}
+                    alt={user.displayName}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <span className="font-display text-sm font-bold text-accent-foreground">
+                    {avatarInitials(user.displayName)}
+                  </span>
+                )}
               </button>
             </ProfilePanel>
           ) : (

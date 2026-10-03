@@ -143,10 +143,18 @@ export default function IssueMap({
 }) {
   const markers = useMemo(
     () =>
-      issues.map((issue) => ({
-        issue,
-        icon: markerIcon(issue, issue.id === selectedId),
-      })),
+      issues
+        .filter(
+          (issue) =>
+            typeof issue.lat === "number" &&
+            !isNaN(issue.lat) &&
+            typeof issue.lng === "number" &&
+            !isNaN(issue.lng),
+        )
+        .map((issue) => ({
+          issue,
+          icon: markerIcon(issue, issue.id === selectedId),
+        })),
     [issues, selectedId],
   );
 

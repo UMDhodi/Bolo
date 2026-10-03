@@ -100,7 +100,12 @@ function HomePage() {
       setIssuesList(data);
       setLoadingIssues(false);
     });
-    return () => unsubscribe();
+    // Failsafe: stop spinner after 1.5s max and show results/empty state immediately
+    const failsafe = setTimeout(() => setLoadingIssues(false), 1500);
+    return () => {
+      unsubscribe();
+      clearTimeout(failsafe);
+    };
   }, []);
 
   const availableStates = useMemo(() => getStatesFromIssues(issuesList), [issuesList]);

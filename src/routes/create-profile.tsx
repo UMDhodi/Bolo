@@ -15,7 +15,12 @@ import { toast } from "sonner";
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import { TurnstileWidget, type TurnstileRef } from "@/components/turnstile";
-import { saveCitizenProfile, uploadAvatar, getFirebaseErrorMessage } from "@/lib/supabase";
+import {
+  saveCitizenProfile,
+  uploadAvatar,
+  getFirebaseErrorMessage,
+  signOutOfBolo,
+} from "@/lib/supabase";
 
 export const Route = createFileRoute("/create-profile")({
   head: () => ({ meta: [{ title: "Complete your profile – Bolo" }] }),
@@ -133,7 +138,16 @@ function CreateProfilePage() {
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Account Created for</p>
               <p className="truncate text-sm font-semibold text-foreground">{user.email}</p>
             </div>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">← Back</span>
+            <button
+              type="button"
+              onClick={async () => {
+                await signOutOfBolo();
+                void navigate({ to: "/auth", replace: true });
+              }}
+              className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary hover:bg-primary/20 transition-colors"
+            >
+              Switch Account
+            </button>
           </div>
         )}
 

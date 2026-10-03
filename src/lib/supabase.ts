@@ -53,6 +53,7 @@ export type UserProfile = {
   verified?: boolean;
   createdAt?: number;
   avatar_url?: string | null;
+  avatarUrl?: string | null;
 };
 
 export type NewIssue = {
@@ -347,6 +348,7 @@ export async function saveCitizenProfile(input: {
     role: "citizen",
     createdAt: Date.now(),
     avatar_url: input.avatar_url ?? null,
+    avatarUrl: input.avatar_url ?? null,
   };
 }
 
@@ -358,7 +360,11 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     if (res.ok) {
       const data = (await res.json()) as { ok: boolean; profile: UserProfile | null };
       if (data.ok && data.profile) {
-        return data.profile;
+        const prof = data.profile;
+        return {
+          ...prof,
+          avatarUrl: prof.avatarUrl || prof.avatar_url || null,
+        };
       }
     }
   } catch {
@@ -374,6 +380,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user;
     if (user && user.id === uid) {
+      const av = (user.user_metadata["avatar_url"] as string | undefined) ?? null;
       return {
         uid,
         displayName:
@@ -383,6 +390,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
           "Bolo citizen",
         email: user.email ?? null,
         phone: user.phone ?? null,
+        avatar_url: av,
+        avatarUrl: av,
       };
     }
     return null;
@@ -391,12 +400,14 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   if (!data) return null;
 
   const row = data as Record<string, unknown>;
+  const av = (row["avatar_url"] as string | undefined) ?? null;
   return {
     uid: row["id"] as string,
     displayName: (row["full_name"] as string | undefined) ?? "Bolo citizen",
     ...(row["full_name"] ? { legalName: row["full_name"] as string } : {}),
     ...(row["phone"] ? { phone: row["phone"] as string } : {}),
-    ...(row["avatar_url"] ? { avatar_url: row["avatar_url"] as string } : {}),
+    avatar_url: av,
+    avatarUrl: av,
     ...(row["created_at"] ? { createdAt: new Date(row["created_at"] as string).getTime() } : {}),
   };
 }
@@ -415,6 +426,7 @@ export async function updateUserProfile(
     displayName?: string | undefined;
     legalName?: string | undefined;
     phone?: string | undefined;
+    avatarUrl?: string | undefined;
   },
 ): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -436,6 +448,9 @@ export async function updateUserProfile(
   }
   if (fields.phone !== undefined) {
     payload["phone"] = fields.phone.trim() || null;
+  }
+  if (fields.avatarUrl !== undefined) {
+    payload["avatar_url"] = fields.avatarUrl.trim() || null;
   }
 
   const { error } = await supabase.from("profiles").update(payload).eq("id", uid);
@@ -605,30 +620,105 @@ export async function deleteUserAccount(uid: string): Promise<void> {
 
 // ── Issues CRUD ───────────────────────────────────────────────────────────────
 
+const DEFAULT_ISSUE_IMAGE =
+  "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22450%22%20viewBox%3D%220%200%20600%20450%22%3E%3Crect%20width%3D%22600%22%20height%3D%22450%22%20fill%3D%22%23f3f4f6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%239ca3af%22%3ENo%20Image%20Uploaded%3C%2Ftext%3E%3C%2Fsvg%3E";
+
+export function normalizeIssueRow(row: Record<string, unknown>): Issue {
+  const rawImages = row["images"];
+  const parsedImages = Array.isArray(rawImages)
+    ? (rawImages as string[])
+    : typeof rawImages === "string"
+      ? [rawImages]
+      : [];
+  const safeImages = parsedImages.length > 0 ? parsedImages : [DEFAULT_ISSUE_IMAGE];
+
+  const rawLat = row["lat"] ?? row["latitude"];
+  const rawLng = row["lng"] ?? row["longitude"];
+  const parsedLat = typeof rawLat === "number" && !isNaN(rawLat) ? rawLat : Number(rawLat);
+  const parsedLng = typeof rawLng === "number" && !isNaN(rawLng) ? rawLng : Number(rawLng);
+
+  const safeLat = !isNaN(parsedLat) && parsedLat !== 0 ? parsedLat : 20.5937;
+  const safeLng = !isNaN(parsedLng) && parsedLng !== 0 ? parsedLng : 78.9629;
+
+  return {
+    id: (row["id"] as string) || `BLO-${Date.now()}`,
+    title: (row["title"] as string) || "Civic Complaint",
+    reporter: (row["reporter"] as string) || "Citizen",
+    reporterUid: (row["reporter_uid"] as string) || (row["reporterUid"] as string) || undefined,
+    userId: (row["user_id"] as string) || (row["userId"] as string) || undefined,
+    reporterEmail: (row["reporter_email"] as string) || (row["reporterEmail"] as string) || null,
+    reporterPhone: (row["reporter_phone"] as string) || (row["reporterPhone"] as string) || null,
+    createdAt: row["created_at"] ? new Date(row["created_at"] as string).getTime() : Date.now(),
+    date:
+      (row["date"] as string) ||
+      (row["created_at"] ? new Date(row["created_at"] as string).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)),
+    status: (row["status"] as "reported" | "progress" | "solved") || "reported",
+    category: (row["category"] as string) || "Civic Issue",
+    location: (row["location"] as string) || "India",
+    address: (row["address"] as string) || "",
+    description: (row["description"] as string) || "",
+    images: safeImages,
+    state: (row["state"] as string) || "",
+    district: (row["district"] as string) || "",
+    city: (row["city"] as string) || "",
+    lat: safeLat,
+    lng: safeLng,
+  };
+}
+
 /** Subscribe to issues (real-time) — returns unsubscribe fn */
 export function subscribeToIssues(callback: (issues: Issue[]) => void): () => void {
   let isSubscribed = true;
 
-  // Initial fetch
-  supabase
-    .from("issues")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .then(({ data }) => {
-      if (isSubscribed && data) callback(data as unknown as Issue[]);
-    });
+  const fetchIssues = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("issues")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data)) {
+        if (isSubscribed) {
+          callback(data.map((r) => normalizeIssueRow(r as Record<string, unknown>)));
+        }
+        return;
+      }
+      if (error) {
+        console.warn("[Issues] Client query error, falling back to /api/issues:", error.message);
+      }
+    } catch (e) {
+      console.warn("[Issues] Client query threw, falling back to /api/issues:", e);
+    }
+
+    // Fallback: try server-side endpoint
+    try {
+      const res = await fetch("/api/issues");
+      if (res.ok) {
+        const body = (await res.json()) as { ok: boolean; issues: Record<string, unknown>[] };
+        if (body.ok && Array.isArray(body.issues)) {
+          if (isSubscribed) {
+            callback(body.issues.map((r) => normalizeIssueRow(r)));
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("[Issues] Server fallback failed:", e);
+    }
+
+    // Always resolve with empty list so loading indicator never gets stuck
+    if (isSubscribed) {
+      callback([]);
+    }
+  };
+
+  void fetchIssues();
 
   // Real-time subscription
   const channel = supabase
     .channel("public:issues")
     .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => {
-      supabase
-        .from("issues")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .then(({ data }) => {
-          if (isSubscribed && data) callback(data as unknown as Issue[]);
-        });
+      void fetchIssues();
     })
     .subscribe();
 

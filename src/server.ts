@@ -646,6 +646,65 @@ async function handleProfileInvalidateRoute(request: Request): Promise<Response 
   }
 }
 
+// ── /api/issues — read issues with service-role fallback & caching ───────────
+async function handleIssuesRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/issues" || request.method !== "GET") return null;
+
+  // 1. Try Redis cache (10s TTL)
+  try {
+    const cached = await cacheGet("issues:all");
+    if (cached) {
+      return new Response(JSON.stringify({ ok: true, issues: JSON.parse(cached), fromCache: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+  } catch {}
+
+  const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const supabaseKey =
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] ??
+    process.env["VITE_SUPABASE_ANON_KEY"] ??
+    process.env["SUPABASE_ANON_KEY"];
+
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(JSON.stringify({ ok: false, issues: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const client = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await client
+      .from("issues")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    const issues = data ?? [];
+
+    try {
+      await cacheSet("issues:all", JSON.stringify(issues));
+    } catch {}
+
+    return new Response(JSON.stringify({ ok: true, issues, fromCache: false }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: err instanceof Error ? err.message : "Failed to load issues",
+        issues: [],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
+
 // ── /api/health — lightweight DB ping to prevent Supabase free-tier pause ────
 async function handleHealthRoute(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
@@ -818,6 +877,12 @@ export default {
     const profileInvalidateResponse = await handleProfileInvalidateRoute(request);
     if (profileInvalidateResponse) {
       return applySecurityHeaders(profileInvalidateResponse, request);
+    }
+
+    // ── /api/issues — cached/service-role issues endpoint ───────────────────
+    const issuesResponse = await handleIssuesRoute(request);
+    if (issuesResponse) {
+      return applySecurityHeaders(issuesResponse, request);
     }
 
     // ── /api/upload/avatar & /api/upload/file — signed R2 upload URL ─────────

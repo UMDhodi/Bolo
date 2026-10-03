@@ -20,6 +20,7 @@ import civicIllustration from "@/assets/bolo-auth-civic-india.png";
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import { TurnstileWidget, type TurnstileRef } from "@/components/turnstile";
+import { toast } from "sonner";
 import {
   signUpWithCredentials,
   saveCitizenProfile,
@@ -32,6 +33,7 @@ import {
   sendPasswordResetLink,
   profileExists,
   verifyAuthGuard,
+  getUserProfile,
 } from "@/lib/supabase";
 import { validateStrongPassword, validateEmailDomain } from "@/lib/utils";
 import { validateIndianPhone } from "@/lib/msg91";
@@ -79,7 +81,7 @@ export const Route = createFileRoute("/auth")({
 //   resetAllStates() did not reset resendTimer back to 30.
 //   FIX: Added `setResendTimer(30)` to resetAllStates().
 
-type Mode = "signup" | "signin" | "phone" | "forgot_password";
+type Mode = "signup" | "signin" | "forgot_password";
 type SignupStep = "credentials" | "profile";
 
 function AuthPage() {
@@ -98,14 +100,6 @@ function AuthPage() {
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
-
-  // Phone OTP States
-  const [phoneAuthNumber, setPhoneAuthNumber] = useState("");
-  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
-  const [phoneOtpCode, setPhoneOtpCode] = useState("");
-  const [phoneTimer, setPhoneTimer] = useState(30);
-  const [canResendPhone, setCanResendPhone] = useState(false);
-  const [phonePending, setPhonePending] = useState(false);
 
   // UID of newly created account (for profile step)
   const [createdUid, setCreatedUid] = useState("");
@@ -134,7 +128,7 @@ function AuthPage() {
   const [oauthExchanging, setOauthExchanging] = useState(false);
 
   const isAnyPending =
-    authPending || googlePending || applePending || resetPending || phonePending || oauthExchanging;
+    authPending || googlePending || applePending || resetPending || oauthExchanging;
 
   // Detect OAuth return — Supabase sets a hash/query with access_token or code
   useEffect(() => {
@@ -197,24 +191,6 @@ function AuthPage() {
     };
   }, [resetSent, resendTimer]);
 
-  // Phone OTP countdown timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (phoneOtpSent && phoneTimer > 0) {
-      interval = setInterval(() => {
-        setPhoneTimer((prev) => {
-          if (prev <= 1) {
-            setCanResendPhone(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [phoneOtpSent, phoneTimer]);
 
   const resetAllStates = (newMode: Mode) => {
     setMode(newMode);
@@ -222,16 +198,11 @@ function AuthPage() {
     setError(null);
     setEmailNotice(null);
     setResetSent(false);
-    setResendTimer(30); // BUG 7 fix
+    setResendTimer(30);
     setCanResend(false);
     setEmailFieldError(null);
     setPhoneError(null);
     setCreatedUid("");
-    setPhoneAuthNumber("");
-    setPhoneOtpSent(false);
-    setPhoneOtpCode("");
-    setPhoneTimer(30);
-    setCanResendPhone(false);
     setTurnstileToken("");
     turnstileRef.current?.reset();
   };
@@ -262,59 +233,6 @@ function AuthPage() {
     }
   }
 
-  // Send Phone OTP
-  async function handleSendPhoneOtp() {
-    const clean = phoneAuthNumber.trim();
-    if (!validateIndianPhone(clean)) {
-      setPhoneError("Please enter a valid 10-digit Indian mobile number.");
-      return;
-    }
-    setPhoneError(null);
-    setError(null);
-    setPhonePending(true);
-    try {
-      const full = clean.startsWith("+91") ? clean : `+91${clean.replace(/\D/g, "")}`;
-      await verifyAuthGuard({ action: "otp-send", phone: full, turnstileToken });
-      await sendPhoneOTP(full);
-      setPhoneOtpSent(true);
-      setPhoneTimer(30);
-      setCanResendPhone(false);
-      setTurnstileToken("");
-      turnstileRef.current?.reset();
-    } catch (err) {
-      setError(getFirebaseErrorMessage(err));
-      turnstileRef.current?.reset();
-    } finally {
-      setPhonePending(false);
-    }
-  }
-
-  // Verify Phone OTP
-  async function handleVerifyPhoneOtp() {
-    if (!phoneOtpCode || phoneOtpCode.trim().length < 6) {
-      setError("Please enter the 6-digit OTP code sent to your phone.");
-      return;
-    }
-    setError(null);
-    setPhonePending(true);
-    try {
-      const clean = phoneAuthNumber.trim();
-      const full = clean.startsWith("+91") ? clean : `+91${clean.replace(/\D/g, "")}`;
-      await verifyAuthGuard({ action: "otp-verify", phone: full, turnstileToken });
-      const loggedUser = await verifyPhoneOTP(full, phoneOtpCode.trim());
-      const hasProf = await profileExists(loggedUser.uid);
-      if (hasProf) {
-        void navigate({ to: "/", replace: true });
-      } else {
-        void navigate({ to: "/create-profile", replace: true });
-      }
-    } catch (err) {
-      setError(getFirebaseErrorMessage(err));
-      turnstileRef.current?.reset();
-    } finally {
-      setPhonePending(false);
-    }
-  }
 
   // Resend password reset link
   async function handleResendPasswordReset() {
@@ -372,8 +290,15 @@ function AuthPage() {
       setAuthPending(true);
       try {
         await verifyAuthGuard({ action: "signin", email: email.trim(), turnstileToken });
-        await signInToBolo(email.trim(), password);
-        // SessionGate will redirect once onAuthStateChange fires
+        const loggedIn = await signInToBolo(email.trim(), password);
+        toast.success("Signed in successfully!");
+        const prof = await getUserProfile(loggedIn.uid);
+        if (prof) {
+          setProfile(prof);
+          void navigate({ to: "/", replace: true });
+        } else {
+          void navigate({ to: "/create-profile", replace: true });
+        }
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
         turnstileRef.current?.reset();
@@ -451,18 +376,6 @@ function AuthPage() {
         return setError("Please enter your full name (minimum 2 characters).");
       }
 
-      const cleanPhone = phone.trim();
-      if (cleanPhone) {
-        const isValidPhone = validateIndianPhone(cleanPhone);
-        if (!isValidPhone) {
-          setPhoneError("Please enter a valid 10-digit Indian mobile number.");
-          return;
-        }
-      }
-      setPhoneError(null);
-
-      // BUG 1 fix: use createdUid (returned from signUpWithCredentials)
-      // Supabase also sets the session immediately, so user.uid is also valid
       const targetUid = createdUid;
       if (!targetUid) {
         setError("Session expired. Please sign in.");
@@ -476,15 +389,13 @@ function AuthPage() {
           uid: targetUid,
           displayName: cleanName,
           legalName: cleanName,
-          ...(cleanPhone ? { phone: cleanPhone } : {}),
           email: email.trim().toLowerCase(),
           turnstileToken,
         });
 
         // ✅ Update context immediately so SessionGate sees hasProfile=true
-        // This prevents the white screen after navigation
         setProfile(savedProfile);
-
+        toast.success(`Welcome to Bolo, ${cleanName}! 🎉`);
         void navigate({ to: "/", replace: true });
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
@@ -559,31 +470,27 @@ function AuthPage() {
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">
               {mode === "forgot_password"
                 ? "Reset your password."
-                : mode === "phone"
-                  ? "Sign in with Phone."
-                  : mode === "signup"
-                    ? signupStep === "profile"
-                      ? "Complete your Profile."
-                      : "Join the change."
-                    : "Welcome back."}
+                : mode === "signup"
+                  ? signupStep === "profile"
+                    ? "Complete your Profile."
+                    : "Join the change."
+                  : "Welcome back."}
             </h1>
 
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {mode === "forgot_password"
                 ? "Enter your registered email and we'll send you a password reset link."
-                : mode === "phone"
-                  ? "Enter your 10-digit mobile number to verify via secure SMS OTP."
-                  : mode === "signup"
-                    ? signupStep === "profile"
-                      ? "Enter your name and phone number to finish setting up your citizen profile."
-                      : "Create your account with your genuine email (Gmail, Outlook, Yahoo, etc.)."
-                    : "Sign in to report issues and track resolutions in your area."}
+                : mode === "signup"
+                  ? signupStep === "profile"
+                    ? "Enter your name to finish setting up your citizen profile."
+                    : "Create your account with your genuine email (Gmail, Outlook, Yahoo, etc.)."
+                  : "Sign in to report issues and track resolutions in your area."}
             </p>
 
             {/* Mode Selector Tabs (only in credentials step) */}
             {mode !== "forgot_password" && signupStep === "credentials" && (
               <div
-                className="mt-3 grid grid-cols-3 rounded-2xl bg-secondary p-1"
+                className="mt-3 grid grid-cols-2 rounded-2xl bg-secondary p-1"
                 role="tablist"
                 aria-label="Authentication mode"
               >
@@ -614,20 +521,6 @@ function AuthPage() {
                   }`}
                 >
                   Sign in
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  disabled={isAnyPending}
-                  aria-selected={mode === "phone"}
-                  onClick={() => resetAllStates("phone")}
-                  className={`min-h-9 rounded-xl text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-60 ${
-                    mode === "phone"
-                      ? "bg-card text-foreground shadow-soft"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Phone OTP
                 </button>
               </div>
             )}
@@ -788,165 +681,6 @@ function AuthPage() {
                   </form>
                 )}
               </div>
-            ) : mode === "phone" ? (
-              <div className="space-y-3 pt-1">
-                {!phoneOtpSent ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void handleSendPhoneOtp();
-                    }}
-                    className="space-y-3"
-                    noValidate
-                  >
-                    <Field
-                      label="Mobile Number (India +91)"
-                      type="tel"
-                      autoComplete="tel"
-                      autoFocus
-                      disabled={phonePending}
-                      value={phoneAuthNumber}
-                      onChange={(val) => {
-                        setPhoneAuthNumber(val);
-                        if (phoneError) setPhoneError(null);
-                      }}
-                      placeholder="9876543210"
-                      icon={<Phone className="size-4 text-muted-foreground" />}
-                      error={phoneError}
-                      required
-                    />
-
-                    {error && (
-                      <p
-                        role="alert"
-                        className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
-                      >
-                        {error}
-                      </p>
-                    )}
-
-                    <TurnstileWidget
-                      ref={turnstileRef}
-                      onVerify={(token) => setTurnstileToken(token)}
-                      action="phone-otp-send"
-                    />
-
-                    <button
-                      type="submit"
-                      disabled={phonePending || !phoneAuthNumber.trim()}
-                      className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {phonePending ? (
-                        <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" />
-                      ) : null}
-                      {phonePending ? "Sending OTP…" : "Send Verification OTP"}
-                      {!phonePending && <ArrowRight className="size-4" />}
-                    </button>
-                  </form>
-                ) : (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void handleVerifyPhoneOtp();
-                    }}
-                    className="space-y-3"
-                    noValidate
-                  >
-                    <div className="rounded-2xl border border-primary/30 bg-primary/5 p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <KeyRound className="size-3.5 text-primary" /> Enter 6-digit OTP
-                        </span>
-                        <button
-                          type="button"
-                          disabled={phonePending}
-                          onClick={() => {
-                            setPhoneOtpSent(false);
-                            setPhoneOtpCode("");
-                            setError(null);
-                          }}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline disabled:opacity-50"
-                        >
-                          Change number
-                        </button>
-                      </div>
-
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        We sent an SMS OTP to{" "}
-                        <span className="font-semibold text-foreground">{phoneAuthNumber}</span>.
-                      </p>
-
-                      <div
-                        className={`flex rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring ${
-                          phonePending ? "opacity-60 cursor-not-allowed bg-muted/30" : ""
-                        }`}
-                      >
-                        <span className="flex items-center border-r border-input px-3 text-muted-foreground">
-                          <KeyRound className="size-4 text-primary" />
-                        </span>
-                        <input
-                          id="phone-otp-input"
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          autoFocus
-                          disabled={phonePending}
-                          value={phoneOtpCode}
-                          onChange={(e) =>
-                            setPhoneOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                          }
-                          placeholder="••••••"
-                          className="h-11 min-w-0 flex-1 rounded-r-2xl bg-transparent px-3 font-mono text-lg tracking-widest outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                          required
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-0.5">
-                        <span>Didn't receive code?</span>
-                        {canResendPhone ? (
-                          <button
-                            type="button"
-                            onClick={handleSendPhoneOtp}
-                            disabled={phonePending}
-                            className="inline-flex items-center gap-1 font-bold text-primary hover:underline disabled:opacity-50"
-                          >
-                            <RotateCw className="size-3" /> Resend OTP
-                          </button>
-                        ) : (
-                          <span>Resend in {phoneTimer}s</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {error && (
-                      <p
-                        role="alert"
-                        className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
-                      >
-                        {error}
-                      </p>
-                    )}
-
-                    <TurnstileWidget
-                      ref={turnstileRef}
-                      onVerify={(token) => setTurnstileToken(token)}
-                      action="phone-otp-verify"
-                    />
-
-                    <button
-                      type="submit"
-                      disabled={phonePending || phoneOtpCode.trim().length < 6}
-                      className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {phonePending ? (
-                        <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" />
-                      ) : null}
-                      {phonePending ? "Verifying OTP…" : "Verify & Continue"}
-                      {!phonePending && <ArrowRight className="size-4" />}
-                    </button>
-                  </form>
-                )}
-              </div>
             ) : (
               /* ── Main Sign Up / Sign In Forms ── */
               <form onSubmit={submit} className="space-y-3 pt-1" noValidate>
@@ -1082,31 +816,6 @@ function AuthPage() {
                       icon={<UserIcon className="size-4 text-muted-foreground" />}
                       required
                     />
-
-                    <div>
-                      <Field
-                        label="Mobile Number (Optional)"
-                        type="tel"
-                        autoComplete="tel"
-                        disabled={authPending}
-                        value={phone}
-                        onChange={(val) => {
-                          setPhone(val);
-                          if (phoneError) setPhoneError(null);
-                        }}
-                        placeholder="e.g. 9876543210"
-                        icon={<Phone className="size-4 text-muted-foreground" />}
-                      />
-                      {phoneError ? (
-                        <p role="alert" className="mt-1 text-[11px] font-medium text-destructive">
-                          {phoneError}
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          Used for municipal status SMS updates.
-                        </p>
-                      )}
-                    </div>
                   </div>
                 )}
 
