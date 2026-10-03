@@ -5,17 +5,17 @@
  *   - A Supabase session exists (user is logged in)
  *   - No profile row exists yet in the `profiles` table
  *
- * On submit: upserts the profile row → navigates to "/"
+ * On submit: upserts the profile row → updates context → navigates to "/"
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, type FormEvent } from "react";
-import { User as UserIcon, Phone, ArrowRight, ImagePlus } from "lucide-react";
+import { User as UserIcon, Mail, ArrowRight, ImagePlus } from "lucide-react";
+import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-context";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import { TurnstileWidget, type TurnstileRef } from "@/components/turnstile";
 import { saveCitizenProfile, uploadAvatar, getFirebaseErrorMessage } from "@/lib/supabase";
-import { validateIndianPhone } from "@/lib/msg91";
 
 export const Route = createFileRoute("/create-profile")({
   head: () => ({ meta: [{ title: "Complete your profile – Bolo" }] }),
@@ -24,13 +24,11 @@ export const Route = createFileRoute("/create-profile")({
 
 function CreateProfilePage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState(
     user?.displayName && user.displayName !== "Bolo citizen" ? user.displayName : "",
   );
-  const [phone, setPhone] = useState(user?.phone ?? "");
-  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -66,15 +64,6 @@ function CreateProfilePage() {
       return;
     }
 
-    const cleanPhone = phone.trim();
-    if (cleanPhone) {
-      if (!validateIndianPhone(cleanPhone)) {
-        setPhoneError("Please enter a valid 10-digit Indian mobile number.");
-        return;
-      }
-    }
-    setPhoneError(null);
-
     setPending(true);
     try {
       let avatarUrl: string | undefined;
@@ -86,18 +75,27 @@ function CreateProfilePage() {
         }
       }
 
-      await saveCitizenProfile({
+      const savedProfile = await saveCitizenProfile({
         uid: user.uid,
         displayName: cleanName,
-        ...(cleanPhone ? { phone: cleanPhone } : {}),
         ...(user.email ? { email: user.email } : {}),
         ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         turnstileToken,
       });
 
+      // ✅ Update context IMMEDIATELY so SessionGate sees hasProfile = true
+      // This prevents the white screen after navigation
+      setProfile(savedProfile);
+
+      toast.success(`Welcome to Bolo, ${cleanName}! 🎉`, {
+        description: "Your profile has been set up successfully.",
+        duration: 4000,
+      });
+
       void navigate({ to: "/", replace: true });
     } catch (err) {
       setError(getFirebaseErrorMessage(err));
+      turnstileRef.current?.reset();
     } finally {
       setPending(false);
     }
@@ -124,8 +122,20 @@ function CreateProfilePage() {
           Complete your Profile.
         </h1>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Set up your citizen profile to start reporting and tracking civic issues in your area.
+          Enter your name and finish setting up your citizen profile.
         </p>
+
+        {/* Account indicator */}
+        {user?.email && (
+          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-border bg-secondary/40 px-3 py-2.5">
+            <Mail className="size-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Account Created for</p>
+              <p className="truncate text-sm font-semibold text-foreground">{user.email}</p>
+            </div>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">← Back</span>
+          </div>
+        )}
 
         <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
           {/* Avatar picker */}
@@ -187,40 +197,6 @@ function CreateProfilePage() {
             </div>
           </div>
 
-          {/* Phone */}
-          <div>
-            <label htmlFor="phone" className="mb-1 block text-xs font-bold text-foreground">
-              Mobile Number <span className="text-muted-foreground font-normal">(Optional)</span>
-            </label>
-            <div className="flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
-              <span className="flex items-center pl-3 text-muted-foreground">
-                <Phone className="size-4" />
-              </span>
-              <input
-                id="phone"
-                type="tel"
-                autoComplete="tel"
-                disabled={pending}
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (phoneError) setPhoneError(null);
-                }}
-                placeholder="e.g. 9876543210"
-                className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
-              />
-            </div>
-            {phoneError ? (
-              <p role="alert" className="mt-1 text-[11px] font-medium text-destructive">
-                {phoneError}
-              </p>
-            ) : (
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                Used for municipal status SMS updates.
-              </p>
-            )}
-          </div>
-
           {/* Error */}
           {error && (
             <p
@@ -247,6 +223,11 @@ function CreateProfilePage() {
             {pending ? "Saving Profile…" : "Save Profile & Enter Bolo"}
             {!pending && <ArrowRight className="size-4" />}
           </button>
+
+          <p className="text-center text-[10px] text-muted-foreground">
+            🔒 Your Bolo ID is a secure unique account ID. Your personal phone and email are
+            never displayed on public complaint cards.
+          </p>
         </form>
       </div>
     </main>

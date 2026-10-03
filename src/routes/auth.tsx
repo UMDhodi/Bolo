@@ -84,7 +84,7 @@ type SignupStep = "credentials" | "profile";
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { user, configured, hasProfile, profileChecked } = useAuth();
+  const { user, configured, hasProfile, profileChecked, setProfile } = useAuth();
 
   const [mode, setMode] = useState<Mode>("signup");
   const [signupStep, setSignupStep] = useState<SignupStep>("credentials");
@@ -472,7 +472,7 @@ function AuthPage() {
 
       setAuthPending(true);
       try {
-        await saveCitizenProfile({
+        const savedProfile = await saveCitizenProfile({
           uid: targetUid,
           displayName: cleanName,
           legalName: cleanName,
@@ -481,8 +481,11 @@ function AuthPage() {
           turnstileToken,
         });
 
-        // SessionGate will pick up hasProfile === true and redirect to "/"
-        void navigate({ to: "/" });
+        // ✅ Update context immediately so SessionGate sees hasProfile=true
+        // This prevents the white screen after navigation
+        setProfile(savedProfile);
+
+        void navigate({ to: "/", replace: true });
       } catch (nextError) {
         setError(getFirebaseErrorMessage(nextError));
         turnstileRef.current?.reset();

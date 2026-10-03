@@ -462,6 +462,7 @@ function HomePage() {
               ref={listRef}
               className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1 lg:max-h-none lg:min-h-0 lg:flex-1"
             >
+              {/* Mutually exclusive states: loading → no-data → list */}
               {loadingIssues ? (
                 <div className="flex flex-1 items-center justify-center py-16">
                   <SpinnerToCheck size={52} color="var(--color-primary)" bg="white" />
@@ -483,20 +484,20 @@ function HomePage() {
                     {t.home.reset}
                   </button>
                 </div>
-              ) : null}
-
-              {displayedIssues.map((issue) => (
-                <div key={issue.id} data-issue={issue.id}>
-                  <IssueListCard
-                    issue={issue}
-                    selected={issue.id === selectedId}
-                    onFocusSelect={() => setSelectedId(issue.id)}
-                    onOpen={() => setOpenIssue(issue)}
-                    onEdit={(i) => setEditingIssue(i)}
-                    onDelete={(i) => setDeletingIssue(i)}
-                  />
-                </div>
-              ))}
+              ) : (
+                displayedIssues.map((issue) => (
+                  <div key={issue.id} data-issue={issue.id}>
+                    <IssueListCard
+                      issue={issue}
+                      selected={issue.id === selectedId}
+                      onFocusSelect={() => setSelectedId(issue.id)}
+                      onOpen={() => setOpenIssue(issue)}
+                      onEdit={(i) => setEditingIssue(i)}
+                      onDelete={(i) => setDeletingIssue(i)}
+                    />
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>

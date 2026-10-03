@@ -1,6 +1,6 @@
 /**
  * AuthContext — powered by Supabase.
- * Exposes: user, profile, loading, configured, hasProfile
+ * Exposes: user, profile, loading, configured, hasProfile, setProfile
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
@@ -8,7 +8,6 @@ import {
   isSupabaseConfigured,
   observeBoloAuth,
   getUserProfile,
-  profileExists,
   type BoloUser,
   type UserProfile,
 } from "@/lib/supabase";
@@ -22,6 +21,8 @@ type AuthContextValue = {
   profileChecked: boolean;
   /** True only if session exists AND a profile row exists */
   hasProfile: boolean;
+  /** Update the profile in-context immediately after save (avoids white screen) */
+  setProfile: (profile: UserProfile | null) => void;
 };
 
 const AuthContext = createContext<AuthContextValue>({
@@ -31,6 +32,7 @@ const AuthContext = createContext<AuthContextValue>({
   configured: false,
   profileChecked: false,
   hasProfile: false,
+  setProfile: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -78,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         configured: isSupabaseConfigured,
         profileChecked,
         hasProfile,
+        setProfile,
       }}
     >
       {children}
@@ -87,9 +90,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   return useContext(AuthContext);
-}
-
-/** Convenience: refresh profile after upsert */
-export async function refreshProfile(uid: string): Promise<UserProfile | null> {
-  return getUserProfile(uid);
 }
