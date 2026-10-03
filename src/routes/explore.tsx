@@ -9,12 +9,16 @@ import { TranslateToggle } from "@/components/translate-toggle";
 import { IssueDetailDialog } from "@/components/issue-detail-dialog";
 import { EditIssueDialog } from "@/components/edit-issue-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import SpinnerToCheck from "@/components/loader";
 import { useAuth } from "@/components/auth-context";
 import { useT } from "@/components/language-context";
@@ -171,14 +175,14 @@ function ExplorePage() {
                     </div>
 
                     <div className="mt-auto flex items-center justify-between gap-3 pt-2">
-                      <button
+                      <Button
                         type="button"
                         onClick={() => setOpenIssue(issue)}
-                        className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                        className="rounded-full px-5 text-sm font-semibold"
                       >
                         {t.explore.cta}
-                        <ArrowUpRight className="size-4" aria-hidden="true" />
-                      </button>
+                        <ArrowUpRight className="size-4 ml-1.5" aria-hidden="true" />
+                      </Button>
                       <TranslateToggle />
                     </div>
                   </div>
@@ -205,36 +209,31 @@ function ExplorePage() {
         onOpenChange={(o) => !o && setEditingIssue(null)}
       />
 
-      <Dialog open={deletingIssue !== null} onOpenChange={(o) => !o && setDeletingIssue(null)}>
-        <DialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-foreground">
+      <AlertDialog open={deletingIssue !== null} onOpenChange={(o) => !o && setDeletingIssue(null)}>
+        <AlertDialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold text-foreground">
               Delete Complaint?
-            </DialogTitle>
-            <DialogDescription className="mt-1 text-sm text-muted-foreground">
+            </AlertDialogTitle>
+            <AlertDialogDescription className="mt-1 text-sm text-muted-foreground">
               Are you sure you want to delete &quot;{deletingIssue?.title}&quot;? This action cannot
               be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-5 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setDeletingIssue(null)}
-              className="inline-flex min-h-10 items-center rounded-full border border-border px-4 text-sm font-semibold text-foreground hover:bg-secondary"
-            >
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 gap-2 sm:gap-3">
+            <AlertDialogCancel className="rounded-full border-border font-semibold">
               Cancel
-            </button>
-            <button
-              type="button"
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={isDeleting}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-destructive px-5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+              className="rounded-full bg-destructive font-semibold text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeleting ? "Deleting…" : "Delete"}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

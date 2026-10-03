@@ -18,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import SpinnerToCheck from "@/components/loader";
 import { updateIssue, getFirebaseErrorMessage } from "@/lib/supabase";
 import type { Issue, IssueStatus } from "@/lib/mock-data";
@@ -117,17 +119,18 @@ export function EditIssueDialog({ issue, open, onOpenChange, onUpdated }: EditIs
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-3xl border-border bg-card p-6 shadow-2xl">
-        <DialogHeader className="mb-4">
+      <DialogContent className="max-h-[92vh] max-w-2xl rounded-3xl border-border bg-card p-0 shadow-2xl flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b border-border/60">
           <DialogTitle className="text-xl font-bold text-foreground">
             Edit Civic Complaint
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription className="text-xs text-muted-foreground mt-0.5">
             Update the grievance details, status, or location info for ID: {issue.id}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSave} className="flex flex-col gap-4">
+        <ScrollArea className="flex-1 max-h-[calc(92vh-90px)] p-6 pt-4">
+          <form onSubmit={handleSave} className="flex flex-col gap-4">
           <div>
             <Label htmlFor="edit-title" className="mb-1.5 block text-sm font-semibold">
               Issue Title
@@ -251,33 +254,36 @@ export function EditIssueDialog({ issue, open, onOpenChange, onUpdated }: EditIs
           </div>
 
           <div className="mt-4 flex items-center justify-end gap-3 border-t border-border pt-4">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => onOpenChange(false)}
-              className="inline-flex min-h-11 items-center rounded-full border border-border px-5 text-sm font-semibold text-foreground hover:bg-secondary"
+              className="rounded-full px-5 text-sm font-semibold"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={submitting}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-soft hover:bg-primary/90 disabled:opacity-60"
+              className="rounded-full px-6 text-sm font-semibold shadow-soft"
             >
               {submitting ? (
                 <>
                   <SpinnerToCheck size={20} color="#ffffff" bg="#0f766e" />
-                  Saving…
+                  <span className="ml-2">Saving…</span>
                 </>
               ) : (
                 <>
-                  <Save className="size-4" />
+                  <Save className="size-4 mr-2" />
                   Save Changes
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+        <ScrollBar orientation="vertical" />
+      </ScrollArea>
+    </DialogContent>
+  </Dialog>
   );
 }

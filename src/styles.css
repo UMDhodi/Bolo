@@ -221,3 +221,73 @@
     0 0 0 6px oklch(1 0 0 / 0.55),
     0 3px 10px oklch(0.3 0.05 60 / 0.4);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   shadcn.ui Theme Scrollbar Styling (Tuned to Bolo Site Theme Color)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+/* WebKit & Blink Browsers (Chrome, Edge, Safari, Arc, Opera, Electron) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: color-mix(in oklch, var(--primary) 6%, transparent);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--primary) 45%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in oklch, var(--primary) 85%, black);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--primary) 40%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary);
+}
+
+.dark ::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in oklch, var(--primary) 90%, white);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox Standards */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--primary) 45%, transparent) color-mix(in oklch, var(--primary) 6%, transparent);
+}
+
+.dark * {
+  scrollbar-color: color-mix(in oklch, var(--primary) 40%, transparent) color-mix(in oklch, var(--primary) 8%, transparent);
+}
+
+

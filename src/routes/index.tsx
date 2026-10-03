@@ -20,6 +20,16 @@ import { EditIssueDialog } from "@/components/edit-issue-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -28,12 +38,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import SpinnerToCheck from "@/components/loader";
 import { useAuth } from "@/components/auth-context";
 import { useT } from "@/components/language-context";
@@ -263,18 +276,26 @@ function HomePage() {
 
         <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:overflow-hidden">
           {/* Map panel */}
-          <section
+          <Card
             aria-label={t.home.title}
-            className="flex min-h-0 flex-col gap-3 overflow-hidden rounded-3xl border border-border bg-card p-4 shadow-soft"
+            className="flex min-h-0 flex-col gap-3 overflow-hidden rounded-3xl border-border bg-card p-4 shadow-soft"
           >
             <div className="grid gap-2.5">
+              {/* Search box with clear button and badge */}
               <div>
-                <Label htmlFor="place-search" className="mb-1 block text-sm font-semibold">
-                  {t.home.searchLabel}
-                </Label>
+                <div className="mb-1 flex items-center justify-between">
+                  <Label htmlFor="place-search" className="text-sm font-semibold">
+                    {t.home.searchLabel}
+                  </Label>
+                  {query && (
+                    <Badge variant="outline" className="text-[11px] font-semibold">
+                      {filteredIssues.length} matching
+                    </Badge>
+                  )}
+                </div>
                 <div className="relative">
                   <Search
-                    className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground"
+                    className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground"
                     aria-hidden="true"
                   />
                   <Input
@@ -282,11 +303,42 @@ function HomePage() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={t.home.searchPlaceholder}
-                    className="h-11 rounded-2xl border-input bg-background pl-12 text-base"
+                    className="h-11 rounded-2xl border-input bg-background pr-10 pl-11 text-base shadow-xs"
                   />
+                  {query && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setQuery("")}
+                      className="absolute top-1/2 right-2 size-7 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground"
+                      aria-label="Clear search"
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
+              {/* Quick filter category chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-xs font-semibold text-muted-foreground">Quick filter:</span>
+                {["All", "Road damage", "Streetlight", "Drainage", "Garbage", "Water"].map((cat) => {
+                  const isActive = (cat === "All" && !query) || query.toLowerCase() === cat.toLowerCase();
+                  return (
+                    <Badge
+                      key={cat}
+                      variant={isActive ? "default" : "outline"}
+                      onClick={() => setQuery(cat === "All" ? "" : cat)}
+                      className="cursor-pointer rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-all hover:bg-primary/20 hover:text-primary"
+                    >
+                      {cat}
+                    </Badge>
+                  );
+                })}
+              </div>
+
+              {/* Location Select Filters */}
               <div className="grid gap-2.5 sm:grid-cols-3">
                 <FilterSelect
                   label={t.home.state}
@@ -311,23 +363,25 @@ function HomePage() {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Button
                   type="button"
                   onClick={locate}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90"
+                  variant="default"
+                  className="min-h-10 rounded-full px-5 text-sm font-semibold shadow-soft"
                 >
                   <LocateFixed className="size-4" aria-hidden="true" />
                   {locating ? t.home.locating : t.home.useLocation}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={resetFilters}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
+                  className="min-h-10 rounded-full px-5 text-sm font-semibold"
                 >
                   <SlidersHorizontal className="size-4" aria-hidden="true" />
                   {t.home.reset}
-                </button>
+                </Button>
                 {locationNote && (
                   <p className="text-xs font-medium text-muted-foreground" role="status">
                     {locationNote}
@@ -338,6 +392,17 @@ function HomePage() {
 
             {/* Map Container with Sub-legend overlay */}
             <div className="relative z-0 isolate h-[400px] overflow-hidden rounded-2xl border border-border lg:h-auto lg:min-h-[300px] lg:flex-1">
+              {/* Map floating status chip */}
+              <div className="absolute top-3 left-3 z-[1000] pointer-events-none flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 rounded-full border-border/80 bg-background/85 px-3 py-1 text-xs font-semibold shadow-md backdrop-blur-md"
+                >
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Civic Map
+                </Badge>
+              </div>
+
               <ClientOnly
                 fallback={
                   <div className="flex size-full items-center justify-center">
@@ -365,26 +430,28 @@ function HomePage() {
 
               {/* Floating Mini Sub-Legend with Cross Icon on Top Right */}
               {selectedIssue && (
-                <div
+                <Card
                   role="region"
                   aria-label="Selected Issue Preview"
-                  className="animate-in fade-in slide-in-from-bottom-4 absolute right-3 bottom-3 left-3 z-[1000] max-w-md rounded-2xl border border-border bg-card/95 p-3.5 shadow-2xl backdrop-blur-md transition-all sm:right-auto sm:left-4"
+                  className="animate-in fade-in slide-in-from-bottom-4 absolute right-3 bottom-3 left-3 z-[1000] max-w-md rounded-2xl border-border bg-card/95 p-3.5 shadow-2xl backdrop-blur-md transition-all sm:right-auto sm:left-4"
                 >
                   {/* Close cross icon */}
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={handleCloseSubLegend}
                     aria-label="Close legend preview"
-                    className="absolute top-2.5 right-2.5 grid size-7 place-items-center rounded-full bg-secondary text-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="absolute top-2.5 right-2.5 size-7 rounded-full bg-secondary text-foreground shadow-sm hover:bg-destructive hover:text-destructive-foreground"
                   >
                     <X className="size-4" aria-hidden="true" />
-                  </button>
+                  </Button>
 
                   <div className="flex gap-3 pr-6">
                     <img
                       src={selectedIssue.images[0]}
                       alt=""
-                      className="size-16 shrink-0 rounded-xl object-cover"
+                      className="size-16 shrink-0 rounded-xl object-cover border border-border"
                     />
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -407,65 +474,64 @@ function HomePage() {
                     <span className="text-[11px] text-muted-foreground">
                       {formatDate(selectedIssue.date)}
                     </span>
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
+                      size="sm"
                       onClick={() => setOpenIssue(selectedIssue)}
-                      className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                      className="h-auto p-0 font-semibold text-primary hover:underline"
                     >
                       View details
-                      <ArrowUpRight className="size-3.5" />
-                    </button>
+                      <ArrowUpRight className="ml-1 size-3.5" />
+                    </Button>
                   </div>
-                </div>
+                </Card>
               )}
             </div>
-          </section>
+          </Card>
 
           {/* Complaint list section */}
           <section aria-label={t.home.listTitle} className="flex min-h-0 flex-col">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold text-foreground">{t.home.listTitle}</h2>
-                <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
+                <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xs font-semibold">
                   {displayedIssues.length}
-                </span>
+                </Badge>
               </div>
 
-              {/* All vs My Sort Filter Toggle */}
-              <div className="flex items-center rounded-full border border-border bg-secondary/40 p-0.5">
-                <button
+              {/* All vs My Sort Filter Toggle using shadcn Button pills */}
+              <div className="flex items-center rounded-full border border-border bg-secondary/40 p-1">
+                <Button
                   type="button"
+                  size="sm"
+                  variant={issueFilterTab === "all" ? "default" : "ghost"}
                   onClick={() => setIssueFilterTab("all")}
-                  className={`rounded-full px-3.5 py-1 text-xs font-semibold transition-all ${
-                    issueFilterTab === "all"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className="h-7 rounded-full px-3 text-xs font-semibold shadow-none"
                 >
                   All ({issuesList.length})
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  size="sm"
+                  variant={issueFilterTab === "my" ? "default" : "ghost"}
                   onClick={() => {
                     if (!user) {
                       toast.info("Please sign in to view your reported complaints.");
                     }
                     setIssueFilterTab("my");
                   }}
-                  className={`rounded-full px-3.5 py-1 text-xs font-semibold transition-all ${
-                    issueFilterTab === "my"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className="h-7 rounded-full px-3 text-xs font-semibold shadow-none"
                 >
                   My ({myIssuesCount})
-                </button>
+                </Button>
               </div>
             </div>
 
-            <div
+            {/* Scrollable complaint list with shadcn ScrollArea and ScrollBar */}
+            <ScrollArea
               ref={listRef}
-              className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1 lg:max-h-none lg:min-h-0 lg:flex-1"
+              className="flex-1 max-h-[70vh] rounded-2xl pr-2.5 lg:max-h-none lg:min-h-0"
             >
               {/* Mutually exclusive states: loading → no-data → list */}
               {loadingIssues ? (
@@ -473,7 +539,7 @@ function HomePage() {
                   <SpinnerToCheck size={52} color="var(--color-primary)" bg="white" />
                 </div>
               ) : displayedIssues.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+                <Card className="rounded-2xl border-dashed border-border bg-card p-8 text-center shadow-none">
                   <p className="text-sm font-semibold text-foreground">
                     {issueFilterTab === "my"
                       ? user
@@ -481,29 +547,33 @@ function HomePage() {
                         : "Please sign in to see complaints you've raised."
                       : t.home.empty}
                   </p>
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={resetFilters}
-                    className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-5 text-sm font-semibold hover:bg-secondary"
+                    className="mt-3 rounded-full px-5 text-sm font-semibold"
                   >
                     {t.home.reset}
-                  </button>
-                </div>
+                  </Button>
+                </Card>
               ) : (
-                displayedIssues.map((issue) => (
-                  <div key={issue.id} data-issue={issue.id}>
-                    <IssueListCard
-                      issue={issue}
-                      selected={issue.id === selectedId}
-                      onFocusSelect={() => setSelectedId(issue.id)}
-                      onOpen={() => setOpenIssue(issue)}
-                      onEdit={(i) => setEditingIssue(i)}
-                      onDelete={(i) => setDeletingIssue(i)}
-                    />
-                  </div>
-                ))
+                <div className="flex flex-col gap-3 pb-4">
+                  {displayedIssues.map((issue) => (
+                    <div key={issue.id} data-issue={issue.id}>
+                      <IssueListCard
+                        issue={issue}
+                        selected={issue.id === selectedId}
+                        onFocusSelect={() => setSelectedId(issue.id)}
+                        onOpen={() => setOpenIssue(issue)}
+                        onEdit={(i) => setEditingIssue(i)}
+                        onDelete={(i) => setDeletingIssue(i)}
+                      />
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
+              <ScrollBar orientation="vertical" />
+            </ScrollArea>
           </section>
         </div>
       </main>
@@ -524,37 +594,32 @@ function HomePage() {
         onOpenChange={(o) => !o && setEditingIssue(null)}
       />
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deletingIssue !== null} onOpenChange={(o) => !o && setDeletingIssue(null)}>
-        <DialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-foreground">
+      {/* Delete confirmation dialog using shadcn AlertDialog */}
+      <AlertDialog open={deletingIssue !== null} onOpenChange={(o) => !o && setDeletingIssue(null)}>
+        <AlertDialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold text-foreground">
               Delete Complaint?
-            </DialogTitle>
-            <DialogDescription className="mt-1 text-sm text-muted-foreground">
+            </AlertDialogTitle>
+            <AlertDialogDescription className="mt-1 text-sm text-muted-foreground">
               Are you sure you want to delete &quot;{deletingIssue?.title}&quot;? This action cannot
               be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-5 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setDeletingIssue(null)}
-              className="inline-flex min-h-10 items-center rounded-full border border-border px-4 text-sm font-semibold text-foreground hover:bg-secondary"
-            >
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 gap-2 sm:gap-3">
+            <AlertDialogCancel className="rounded-full border-border font-semibold">
               Cancel
-            </button>
-            <button
-              type="button"
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={isDeleting}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-destructive px-5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+              className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 font-semibold"
             >
               {isDeleting ? "Deleting…" : "Delete"}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

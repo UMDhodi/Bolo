@@ -9,7 +9,7 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, type FormEvent } from "react";
-import { User as UserIcon, Mail, ArrowRight, ImagePlus } from "lucide-react";
+import { User as UserIcon, Mail, ArrowRight, ImagePlus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-context";
@@ -21,6 +21,12 @@ import {
   getFirebaseErrorMessage,
   signOutOfBolo,
 } from "@/lib/supabase";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export const Route = createFileRoute("/create-profile")({
   head: () => ({ meta: [{ title: "Complete your profile – Bolo" }] }),
@@ -89,7 +95,6 @@ function CreateProfilePage() {
       });
 
       // ✅ Update context IMMEDIATELY so SessionGate sees hasProfile = true
-      // This prevents the white screen after navigation
       setProfile(savedProfile);
 
       toast.success(`Welcome to Bolo, ${cleanName}! 🎉`, {
@@ -122,127 +127,135 @@ function CreateProfilePage() {
           <span className="font-display text-2xl font-bold text-foreground">Bolo</span>
         </div>
 
-        <p className="text-xs font-bold tracking-wider text-primary uppercase">One more step</p>
-        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground">
-          Complete your Profile.
-        </h1>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Enter your name and finish setting up your citizen profile.
-        </p>
+        <Card className="rounded-3xl border-border bg-card shadow-soft overflow-hidden">
+          <CardHeader className="p-6 pb-2">
+            <Badge variant="outline" className="w-fit text-primary border-primary/30 uppercase tracking-wider text-[10px] font-bold mb-1">
+              One more step
+            </Badge>
+            <CardTitle className="font-display text-2xl font-bold tracking-tight text-foreground">
+              Complete your Profile
+            </CardTitle>
+            <CardDescription className="text-xs leading-relaxed text-muted-foreground">
+              Enter your name and finish setting up your citizen identity.
+            </CardDescription>
+          </CardHeader>
 
-        {/* Account indicator */}
-        {user?.email && (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-border bg-secondary/40 px-3 py-2.5">
-            <Mail className="size-4 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Account Created for</p>
-              <p className="truncate text-sm font-semibold text-foreground">{user.email}</p>
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                await signOutOfBolo();
-                void navigate({ to: "/auth", replace: true });
-              }}
-              className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary hover:bg-primary/20 transition-colors"
-            >
-              Switch Account
-            </button>
-          </div>
-        )}
-
-        <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-          {/* Avatar picker */}
-          <div className="flex flex-col items-center gap-3">
-            <label
-              htmlFor="avatar-upload"
-              className="group relative cursor-pointer"
-              aria-label="Upload profile photo"
-            >
-              <div className="size-20 overflow-hidden rounded-full border-2 border-dashed border-primary/40 bg-secondary transition-colors group-hover:border-primary">
-                {avatarPreview ? (
-                  <img
-                    src={avatarPreview}
-                    alt="Avatar preview"
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground group-hover:text-primary">
-                    <ImagePlus className="size-6" />
-                    <span className="text-[10px] font-semibold">Add photo</span>
-                  </div>
-                )}
+          <CardContent className="p-6 pt-3 space-y-5">
+            {/* Account indicator */}
+            {user?.email && (
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-secondary/40 px-3.5 py-2.5">
+                <Mail className="size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Account Created for
+                  </p>
+                  <p className="truncate text-sm font-semibold text-foreground">{user.email}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    await signOutOfBolo();
+                    void navigate({ to: "/auth", replace: true });
+                  }}
+                  className="rounded-full text-[11px] font-bold text-primary hover:bg-primary/10 h-7 px-2.5"
+                >
+                  Switch
+                </Button>
               </div>
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                onChange={handleAvatarChange}
-                disabled={pending}
+            )}
+
+            <form onSubmit={submit} className="space-y-4" noValidate>
+              {/* Avatar picker with shadcn Avatar */}
+              <div className="flex flex-col items-center gap-2.5">
+                <label
+                  htmlFor="avatar-upload"
+                  className="group relative cursor-pointer"
+                  aria-label="Upload profile photo"
+                >
+                  <Avatar className="size-20 border-2 border-dashed border-primary/40 bg-secondary transition-colors group-hover:border-primary">
+                    {avatarPreview ? (
+                      <AvatarImage src={avatarPreview} alt="Avatar preview" className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="flex flex-col items-center justify-center gap-1 text-muted-foreground group-hover:text-primary bg-secondary">
+                      <ImagePlus className="size-6" />
+                      <span className="text-[10px] font-semibold">Add photo</span>
+                    </AvatarFallback>
+                  </Avatar>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={handleAvatarChange}
+                    disabled={pending}
+                  />
+                </label>
+                <p className="text-[11px] text-muted-foreground">
+                  Optional · Max 5 MB · JPG, PNG, WebP
+                </p>
+              </div>
+
+              {/* Full name input */}
+              <div className="space-y-1.5">
+                <Label htmlFor="full-name" className="text-xs font-bold text-foreground">
+                  Full / Display Name <span className="text-destructive">*</span>
+                </Label>
+                <div className="flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
+                  <span className="flex items-center pl-3 text-muted-foreground">
+                    <UserIcon className="size-4" />
+                  </span>
+                  <Input
+                    id="full-name"
+                    type="text"
+                    autoComplete="name"
+                    autoFocus
+                    disabled={pending}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="e.g. Aarav Mehta"
+                    className="h-10 border-0 bg-transparent text-sm focus-visible:ring-0 shadow-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Error Alert */}
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
+                >
+                  {error}
+                </p>
+              )}
+
+              <TurnstileWidget
+                ref={turnstileRef}
+                onVerify={(token) => setTurnstileToken(token)}
+                action="profile-create"
               />
-            </label>
-            <p className="text-[11px] text-muted-foreground">
-              Optional · Max 5 MB · JPG, PNG, WebP
-            </p>
-          </div>
 
-          {/* Full name */}
-          <div>
-            <label htmlFor="full-name" className="mb-1 block text-xs font-bold text-foreground">
-              Full / Display Name <span className="text-destructive">*</span>
-            </label>
-            <div className="flex items-center rounded-2xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring">
-              <span className="flex items-center pl-3 text-muted-foreground">
-                <UserIcon className="size-4" />
-              </span>
-              <input
-                id="full-name"
-                type="text"
-                autoComplete="name"
-                autoFocus
-                disabled={pending}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Aarav Mehta"
-                className="h-10 w-full rounded-2xl bg-transparent px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                required
-              />
-            </div>
-          </div>
+              {/* Submit with shadcn Button */}
+              <Button
+                type="submit"
+                size="lg"
+                disabled={pending || !displayName.trim()}
+                className="w-full rounded-full font-bold shadow-soft"
+              >
+                {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
+                {pending ? "Saving Profile…" : "Save Profile & Enter Bolo"}
+                {!pending && <ArrowRight className="size-4 ml-1.5" />}
+              </Button>
 
-          {/* Error */}
-          {error && (
-            <p
-              role="alert"
-              className="rounded-2xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
-            >
-              {error}
-            </p>
-          )}
-
-          <TurnstileWidget
-            ref={turnstileRef}
-            onVerify={(token) => setTurnstileToken(token)}
-            action="profile-create"
-          />
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={pending || !displayName.trim()}
-            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {pending ? <BSpinnerToCheck size={22} color="#ffffff" bg="#059669" /> : null}
-            {pending ? "Saving Profile…" : "Save Profile & Enter Bolo"}
-            {!pending && <ArrowRight className="size-4" />}
-          </button>
-
-          <p className="text-center text-[10px] text-muted-foreground">
-            🔒 Your Bolo ID is a secure unique account ID. Your personal phone and email are
-            never displayed on public complaint cards.
-          </p>
-        </form>
+              <div className="flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground pt-1">
+                <ShieldCheck className="size-3.5 text-primary shrink-0" />
+                <span>Your personal email and phone are kept private and never shown on public complaints.</span>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </main>
   );

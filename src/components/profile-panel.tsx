@@ -20,6 +20,8 @@ import {
   ChevronDown,
   ChevronUp,
   Camera,
+  Activity,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,7 +32,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+
 import SpinnerToCheck from "@/components/loader";
 import BSpinnerToCheck from "@/components/bspinnertocheck";
 import { useAuth } from "@/components/auth-context";
@@ -78,33 +106,46 @@ function avatarColor(name: string): [string, string] {
   ];
 }
 
-// ── Stat KPI Card ───────────────────────────────────────────────────────────
+// ── Stat KPI Card using shadcn Card ─────────────────────────────────────────
 function KpiCard({ label, value }: { label: string; value: number | null }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-secondary/50 p-4 text-center">
-      <span className="text-3xl font-bold text-primary tabular-nums">
-        {value === null ? "—" : value}
-      </span>
-      <span className="mt-1 text-xs font-semibold text-muted-foreground">{label}</span>
-    </div>
+    <Card className="rounded-2xl border-border bg-secondary/30 text-center shadow-none">
+      <CardContent className="flex flex-col items-center justify-center p-4">
+        <span className="text-3xl font-bold tracking-tight text-primary tabular-nums">
+          {value === null ? "—" : value}
+        </span>
+        <span className="mt-1 text-xs font-semibold text-muted-foreground">{label}</span>
+      </CardContent>
+    </Card>
   );
 }
 
 // ── Read-only field row ─────────────────────────────────────────────────────
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+function InfoRow({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value?: string | null;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </span>
-      <span className="text-sm font-medium text-foreground break-all">
-        {value || <span className="text-muted-foreground italic">—</span>}
-      </span>
+    <div className="flex items-center justify-between gap-2 py-1">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {label}
+        </span>
+        <span className="text-sm font-medium text-foreground break-all">
+          {value || <span className="text-muted-foreground italic">—</span>}
+        </span>
+      </div>
+      {action}
     </div>
   );
 }
 
-// ── Editable text field ─────────────────────────────────────────────────────
+// ── Editable text field using shadcn Label and Input ────────────────────────
 function EditField({
   label,
   value,
@@ -119,22 +160,22 @@ function EditField({
   placeholder?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
         {label}
-      </label>
-      <input
+      </Label>
+      <Input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring"
+        className="h-10 rounded-xl bg-background text-sm"
       />
     </div>
   );
 }
 
-// ── Main ProfilePanel (Dropdown Menu matching design + Dialog for Details) ──
+// ── Main ProfilePanel (Dropdown Menu + Dialog with Tabs, ScrollArea & Cards) ─
 export function ProfilePanel({ children }: { children: React.ReactNode }) {
   const { user, profile: contextProfile, setProfile: setContextProfile } = useAuth();
   const t = useT();
@@ -157,8 +198,6 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
   const [editName, setEditName] = useState("");
   const [editLegal, setEditLegal] = useState("");
   const [editPhone, setEditPhone] = useState("");
-
-  const fetchedRef = useRef(false);
 
   // Fetch profile + KPI when profile dialog opens
   useEffect(() => {
@@ -344,32 +383,25 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
       (user.phone && user.phone.length > 6)),
   );
 
-  // Truncate UID for display e.g. 507764d9-82bc-44b3-aa6e-ef092c...
-  const truncatedUid = user.uid.length > 28 ? `${user.uid.slice(0, 28)}...` : user.uid;
-
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 
-        {/* ── Exact Dropdown Menu from Screenshot ── */}
+        {/* ── Dropdown Menu Content ── */}
         <DropdownMenuContent
           align="end"
           sideOffset={8}
           className="w-72 rounded-2xl border border-border bg-card p-2 shadow-xl animate-in fade-in-50 zoom-in-95"
         >
-          {/* Top user summary with avatar */}
+          {/* Top user summary with shadcn Avatar */}
           <div className="flex items-center gap-3 rounded-xl bg-secondary/40 p-2.5 mb-1">
-            <div
-              className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full border border-border text-xs font-bold"
-              style={{ backgroundColor: bgColor, color: textColor }}
-            >
-              {effectiveAvatar ? (
-                <img src={effectiveAvatar} alt={displayName} className="size-full object-cover" />
-              ) : (
-                <span>{avatarInitials(displayName)}</span>
-              )}
-            </div>
+            <Avatar className="size-10 border border-border">
+              {effectiveAvatar && <AvatarImage src={effectiveAvatar} alt={displayName} className="object-cover" />}
+              <AvatarFallback style={{ backgroundColor: bgColor, color: textColor }} className="text-xs font-bold">
+                {avatarInitials(displayName)}
+              </AvatarFallback>
+            </Avatar>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-bold text-foreground">{displayName}</p>
               <p className="truncate text-[10px] text-muted-foreground">{user.email || user.phone}</p>
@@ -422,334 +454,401 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* ── Full Profile & Edit Details Dialog ── */}
+      {/* ── Upgraded Profile Dialog with Tabs, Cards, ScrollArea, Avatar, Badges ── */}
       <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
-        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto rounded-3xl border-border bg-card p-6 shadow-soft">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl font-bold text-foreground">
-              {t.profile.title}
-            </DialogTitle>
+        <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-xl rounded-3xl border-border bg-card p-0 shadow-2xl flex flex-col overflow-hidden">
+          <DialogHeader className="p-6 pb-2 border-b border-border/60">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="font-display text-2xl font-bold text-foreground">
+                  {t.profile.title}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Manage your citizen credentials, community activity, and account security.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          {/* Avatar & Verification Banner */}
-          <div className="flex items-center gap-4 rounded-2xl bg-secondary/50 p-4">
-            <div className="relative group shrink-0">
-              <div
-                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold shadow-md border-2 border-border"
-                style={{ backgroundColor: bgColor, color: textColor }}
-                aria-hidden="true"
-              >
-                {effectiveAvatar ? (
-                  <img
-                    src={effectiveAvatar}
-                    alt={displayName}
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <span>{avatarInitials(displayName)}</span>
-                )}
-              </div>
-              <label
-                htmlFor="profile-panel-avatar-input"
-                title="Change profile photo"
-                className="absolute -bottom-1 -right-1 grid size-7 cursor-pointer place-items-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-110 active:scale-95"
-              >
-                {uploadingAvatar ? (
-                  <SpinnerToCheck size={14} color="#ffffff" bg="#0f766e" />
-                ) : (
-                  <Camera className="size-3.5" />
-                )}
-                <input
-                  id="profile-panel-avatar-input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  disabled={uploadingAvatar}
-                  onChange={handleAvatarUpload}
-                />
-              </label>
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate font-display text-base font-bold text-foreground">
-                  {displayName}
-                </h3>
-                {isVerified ? (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700"
-                    title={t.profile.verified}
-                  >
-                    <BadgeCheck className="size-3.5" aria-hidden="true" />
-                    {t.profile.verified}
-                  </span>
-                ) : (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
-                    title={t.profile.notVerified}
-                  >
-                    <CircleAlert className="size-3.5" aria-hidden="true" />
-                    {t.profile.notVerified}
-                  </span>
-                )}
-              </div>
-              <p className="truncate text-xs text-muted-foreground">{user.email || user.phone}</p>
-              <label
-                htmlFor="profile-panel-avatar-input"
-                className="mt-1 inline-block cursor-pointer text-[11px] font-semibold text-primary hover:underline"
-              >
-                {effectiveAvatar ? "Change photo" : "Upload photo"}
-              </label>
-            </div>
-          </div>
-
-          {/* KPI Stat */}
-          <KpiCard label={t.profile.complaintsRaised} value={issueCount} />
-
-          {/* Profile fields / edit form */}
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-foreground">Personal Information</span>
-              {!editing && (
-                <button
-                  type="button"
-                  onClick={startEdit}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary"
-                >
-                  <Edit2 className="size-3.5" />
-                  {t.profile.editProfile}
-                </button>
-              )}
-            </div>
-
-            {editing ? (
-              <div className="flex flex-col gap-3">
-                <EditField
-                  label={t.profile.legalName}
-                  value={editLegal}
-                  onChange={setEditLegal}
-                  placeholder="e.g. Rahul Sharma"
-                />
-                <EditField
-                  label="Display Name"
-                  value={editName}
-                  onChange={setEditName}
-                  placeholder="Display name"
-                />
-                <EditField
-                  label={t.profile.mobile}
-                  value={editPhone}
-                  onChange={setEditPhone}
-                  type="tel"
-                  placeholder="+91 XXXXX XXXXX"
-                />
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={cancelEdit}
-                    disabled={saving}
-                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full border border-border text-sm font-semibold transition-colors hover:bg-secondary disabled:opacity-60"
-                  >
-                    <X className="size-4" />
-                    {t.profile.cancel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={save}
-                    disabled={saving}
-                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60"
-                  >
-                    {saving ? (
-                      <SpinnerToCheck size={18} color="#ffffff" bg="#0f766e" />
-                    ) : (
-                      <Save className="size-4" />
+          {/* ScrollArea with ScrollBar for fluid scrolling */}
+          <ScrollArea className="flex-1 max-h-[calc(92vh-100px)] p-6 pt-4">
+            {/* Citizen Header Card */}
+            <Card className="rounded-2xl border-border bg-secondary/40 shadow-none mb-6">
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="relative group shrink-0">
+                  <Avatar className="size-16 border-2 border-border shadow-md">
+                    {effectiveAvatar && (
+                      <AvatarImage src={effectiveAvatar} alt={displayName} className="object-cover" />
                     )}
-                    {saving ? t.profile.saving : t.profile.saveChanges}
-                  </button>
+                    <AvatarFallback
+                      style={{ backgroundColor: bgColor, color: textColor }}
+                      className="text-lg font-bold"
+                    >
+                      {avatarInitials(displayName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <label
+                    htmlFor="profile-panel-avatar-input"
+                    title="Change profile photo"
+                    className="absolute -bottom-1 -right-1 grid size-7 cursor-pointer place-items-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-110 active:scale-95"
+                  >
+                    {uploadingAvatar ? (
+                      <SpinnerToCheck size={14} color="#ffffff" bg="#0f766e" />
+                    ) : (
+                      <Camera className="size-3.5" />
+                    )}
+                    <input
+                      id="profile-panel-avatar-input"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      disabled={uploadingAvatar}
+                      onChange={handleAvatarUpload}
+                    />
+                  </label>
                 </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3.5 rounded-2xl border border-border bg-card p-4">
-                <InfoRow
-                  label={t.profile.legalName}
-                  value={profile?.legalName ?? user.displayName}
-                />
-                <InfoRow label={t.profile.mobile} value={profile?.phone ?? user.phone ?? "—"} />
-                <InfoRow label={t.profile.email} value={user.email ?? "—"} />
-                <InfoRow label="User ID" value={user.uid} />
-              </div>
-            )}
 
-            {/* ── Direct Password Change (No verification link system, updates stored under user UID) ── */}
-            <div className="flex flex-col gap-2 rounded-2xl border border-border/80 bg-card p-3.5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <Lock className="size-3.5 text-primary" /> Password & Security
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPasswordExpanded(!passwordExpanded);
-                    setNewPassword("");
-                    setConfirmPassword("");
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                >
-                  {passwordExpanded ? (
-                    <>
-                      Cancel <ChevronUp className="size-3.5" />
-                    </>
-                  ) : (
-                    <>
-                      Change Password <ChevronDown className="size-3.5" />
-                    </>
-                  )}
-                </button>
-              </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate font-display text-base font-bold text-foreground">
+                      {displayName}
+                    </h3>
+                    {isVerified ? (
+                      <Badge variant="outline" className="border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 gap-1 text-[11px] font-semibold py-0.5 px-2">
+                        <BadgeCheck className="size-3.5" />
+                        {t.profile.verified}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 gap-1 text-[11px] font-semibold py-0.5 px-2">
+                        <CircleAlert className="size-3.5" />
+                        {t.profile.notVerified}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground mt-0.5">{user.email || user.phone}</p>
+                  <label
+                    htmlFor="profile-panel-avatar-input"
+                    className="mt-1 inline-block cursor-pointer text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    {effectiveAvatar ? "Change photo" : "Upload photo"}
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
 
-              {passwordExpanded && (
-                <form
-                  onSubmit={handlePasswordUpdate}
-                  className="flex flex-col gap-2.5 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-200"
-                >
-                  <div>
-                    <label className="mb-1 block text-[11px] font-bold text-foreground">
-                      New Password
-                    </label>
-                    <div className="flex items-center rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-                      <span className="pl-3 text-muted-foreground">
-                        <KeyRound className="size-3.5" />
-                      </span>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        disabled={updatingPassword}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="8+ characters (Aa, 1, #)"
-                        className="h-9 w-full rounded-xl bg-transparent px-3 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                        required
-                      />
+            {/* Organized Tab Navigation with shadcn Tabs */}
+            <Tabs defaultValue="info" className="w-full">
+              <TabsList className="grid grid-cols-3 w-full rounded-2xl bg-secondary/60 p-1 mb-5">
+                <TabsTrigger value="info" className="rounded-xl text-xs font-bold py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  <User className="size-3.5 mr-1.5" /> Info
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="rounded-xl text-xs font-bold py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  <Activity className="size-3.5 mr-1.5" /> Activity
+                </TabsTrigger>
+                <TabsTrigger value="security" className="rounded-xl text-xs font-bold py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  <Lock className="size-3.5 mr-1.5" /> Security
+                </TabsTrigger>
+              </TabsList>
+
+              {/* ── Tab 1: Info ── */}
+              <TabsContent value="info" className="space-y-4 focus-visible:outline-none">
+                <Card className="rounded-2xl border-border bg-card shadow-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2 p-5">
+                    <div>
+                      <CardTitle className="text-sm font-bold text-foreground">Personal Information</CardTitle>
+                      <CardDescription className="text-xs text-muted-foreground">Your verified civic identity details</CardDescription>
                     </div>
-                    {newPassword && (
-                      <div className="mt-1.5 grid grid-cols-2 gap-1 sm:grid-cols-3">
-                        <RequirementItem met={newPwdValidation.hasMinLength} label="8+ chars" />
-                        <RequirementItem met={newPwdValidation.hasUpper} label="Uppercase" />
-                        <RequirementItem met={newPwdValidation.hasLower} label="Lowercase" />
-                        <RequirementItem met={newPwdValidation.hasNumber} label="Number" />
-                        <RequirementItem met={newPwdValidation.hasSpecial} label="Symbol" />
+                    {!editing && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={startEdit}
+                        className="rounded-full gap-1.5 text-xs font-semibold"
+                      >
+                        <Edit2 className="size-3.5" />
+                        {t.profile.editProfile}
+                      </Button>
+                    )}
+                  </CardHeader>
+
+                  <CardContent className="p-5 pt-0">
+                    {editing ? (
+                      <div className="flex flex-col gap-3 pt-2">
+                        <EditField
+                          label={t.profile.legalName}
+                          value={editLegal}
+                          onChange={setEditLegal}
+                          placeholder="e.g. Rahul Sharma"
+                        />
+                        <EditField
+                          label="Display Name"
+                          value={editName}
+                          onChange={setEditName}
+                          placeholder="Display name"
+                        />
+                        <EditField
+                          label={t.profile.mobile}
+                          value={editPhone}
+                          onChange={setEditPhone}
+                          type="tel"
+                          placeholder="+91 XXXXX XXXXX"
+                        />
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={cancelEdit}
+                            disabled={saving}
+                            className="flex-1 rounded-xl"
+                          >
+                            <X className="size-4 mr-1.5" />
+                            {t.profile.cancel}
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={save}
+                            disabled={saving}
+                            className="flex-1 rounded-xl bg-primary text-primary-foreground"
+                          >
+                            {saving ? (
+                              <SpinnerToCheck size={18} color="#ffffff" bg="#0f766e" />
+                            ) : (
+                              <Save className="size-4 mr-1.5" />
+                            )}
+                            {saving ? t.profile.saving : t.profile.saveChanges}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/60">
+                        <InfoRow
+                          label={t.profile.legalName}
+                          value={profile?.legalName ?? user.displayName}
+                        />
+                        <InfoRow label={t.profile.mobile} value={profile?.phone ?? user.phone ?? "—"} />
+                        <InfoRow label={t.profile.email} value={user.email ?? "—"} />
+                        <InfoRow
+                          label="Citizen User ID"
+                          value={user.uid}
+                          action={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={copyUidToClipboard}
+                              className="h-8 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                              title="Copy Citizen ID"
+                            >
+                              {copiedUid ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                              <span className="sr-only">Copy UID</span>
+                            </Button>
+                          }
+                        />
                       </div>
                     )}
-                  </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                  <div>
-                    <label className="mb-1 block text-[11px] font-bold text-foreground">
-                      Confirm New Password
-                    </label>
-                    <div className="flex items-center rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-                      <span className="pl-3 text-muted-foreground">
-                        <KeyRound className="size-3.5" />
-                      </span>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        disabled={updatingPassword}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Repeat new password"
-                        className="h-9 w-full rounded-xl bg-transparent px-3 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-                        required
-                      />
+              {/* ── Tab 2: Activity ── */}
+              <TabsContent value="activity" className="space-y-4 focus-visible:outline-none">
+                <div className="grid grid-cols-2 gap-3">
+                  <KpiCard label={t.profile.complaintsRaised} value={issueCount} />
+                  <Card className="rounded-2xl border-border bg-secondary/30 text-center shadow-none flex flex-col items-center justify-center p-4">
+                    <span className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
+                      Active
+                    </span>
+                    <span className="mt-1 text-xs font-semibold text-muted-foreground">Community Standing</span>
+                  </Card>
+                </div>
+
+                <Card className="rounded-2xl border-border bg-card shadow-sm p-4">
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">
+                    Grievance Contribution Summary
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Every complaint you raise contributes to verifiable local civic accountability. You can filter and view your submitted complaints on the home screen using the "My Complaints" toggle.
+                  </p>
+                </Card>
+              </TabsContent>
+
+              {/* ── Tab 3: Security & Privacy ── */}
+              <TabsContent value="security" className="space-y-4 focus-visible:outline-none">
+                {/* Direct Password Update Card */}
+                <Card className="rounded-2xl border-border bg-card shadow-sm">
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Lock className="size-4 text-primary" />
+                        <CardTitle className="text-sm font-bold text-foreground">Password & Credentials</CardTitle>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPasswordExpanded(!passwordExpanded);
+                          setNewPassword("");
+                          setConfirmPassword("");
+                        }}
+                        className="text-xs font-bold text-primary h-8 px-2"
+                      >
+                        {passwordExpanded ? (
+                          <>Cancel <ChevronUp className="size-3.5 ml-1" /></>
+                        ) : (
+                          <>Change Password <ChevronDown className="size-3.5 ml-1" /></>
+                        )}
+                      </Button>
                     </div>
-                  </div>
+                  </CardHeader>
 
-                  <button
-                    type="submit"
-                    disabled={updatingPassword || !newPassword || newPassword !== confirmPassword}
-                    className="mt-1 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {updatingPassword ? (
-                      <SpinnerToCheck size={16} color="#ffffff" bg="#0f766e" />
-                    ) : (
-                      <Save className="size-3.5" />
-                    )}
-                    {updatingPassword ? "Updating Password..." : "Update Password"}
-                  </button>
-                </form>
-              )}
-            </div>
+                  {passwordExpanded && (
+                    <CardContent className="p-4 pt-2 border-t border-border/60">
+                      <form onSubmit={handlePasswordUpdate} className="flex flex-col gap-3">
+                        <div>
+                          <Label className="mb-1 block text-[11px] font-bold text-foreground">
+                            New Password
+                          </Label>
+                          <div className="flex items-center rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                            <span className="pl-3 text-muted-foreground">
+                              <KeyRound className="size-3.5" />
+                            </span>
+                            <Input
+                              type="password"
+                              autoComplete="new-password"
+                              disabled={updatingPassword}
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              placeholder="8+ characters (Aa, 1, #)"
+                              className="h-9 border-0 bg-transparent text-xs focus-visible:ring-0 shadow-none"
+                              required
+                            />
+                          </div>
+                          {newPassword && (
+                            <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                              <RequirementItem met={newPwdValidation.hasMinLength} label="8+ chars" />
+                              <RequirementItem met={newPwdValidation.hasUpper} label="Uppercase" />
+                              <RequirementItem met={newPwdValidation.hasLower} label="Lowercase" />
+                              <RequirementItem met={newPwdValidation.hasNumber} label="Number" />
+                              <RequirementItem met={newPwdValidation.hasSpecial} label="Symbol" />
+                            </div>
+                          )}
+                        </div>
 
-            {/* Privacy & Compliance Actions (GDPR / DPDP) */}
-            <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-border/70 bg-secondary/30 p-3.5">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider text-[10px]">
-                  Data Privacy & Control
-                </span>
-                <span className="text-[10px] text-muted-foreground">DPDP / GDPR Compliant</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportData}
-                  disabled={exporting}
-                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-xs font-semibold transition-colors hover:bg-secondary disabled:opacity-60"
-                >
-                  <Download className="size-3.5 text-primary" />
-                  {exporting ? "Exporting…" : "Export My Data (JSON)"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20"
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete Account
-                </button>
-              </div>
-            </div>
-          </div>
+                        <div>
+                          <Label className="mb-1 block text-[11px] font-bold text-foreground">
+                            Confirm New Password
+                          </Label>
+                          <div className="flex items-center rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                            <span className="pl-3 text-muted-foreground">
+                              <KeyRound className="size-3.5" />
+                            </span>
+                            <Input
+                              type="password"
+                              autoComplete="new-password"
+                              disabled={updatingPassword}
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              placeholder="Repeat new password"
+                              className="h-9 border-0 bg-transparent text-xs focus-visible:ring-0 shadow-none"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          disabled={updatingPassword || !newPassword || newPassword !== confirmPassword}
+                          className="mt-1 h-9 w-full rounded-xl bg-primary text-xs font-bold"
+                        >
+                          {updatingPassword ? (
+                            <SpinnerToCheck size={16} color="#ffffff" bg="#0f766e" />
+                          ) : (
+                            <Save className="size-3.5 mr-1.5" />
+                          )}
+                          {updatingPassword ? "Updating Password..." : "Update Password"}
+                        </Button>
+                      </form>
+                    </CardContent>
+                  )}
+                </Card>
+
+                {/* Privacy & Compliance Actions Card */}
+                <Card className="rounded-2xl border-border bg-secondary/30 shadow-none">
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-bold uppercase tracking-wider text-[10px] text-foreground">
+                        Data Privacy & Compliance (DPDP / GDPR)
+                      </span>
+                      <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                        Encrypted
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-1 flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportData}
+                      disabled={exporting}
+                      className="flex-1 rounded-xl text-xs gap-1.5 h-9"
+                    >
+                      <Download className="size-3.5 text-primary" />
+                      {exporting ? "Exporting…" : "Export Data (JSON)"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDeleteConfirmOpen(true)}
+                      className="rounded-xl text-xs gap-1.5 h-9"
+                    >
+                      <Trash2 className="size-3.5" />
+                      Delete Account
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            <ScrollBar orientation="vertical" />
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
-      {/* ── Account Deletion Confirmation Dialog ── */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-display text-lg font-bold text-destructive">
+      {/* ── Account Deletion Confirmation AlertDialog (shadcn AlertDialog) ── */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent className="max-w-md rounded-3xl border-border bg-card p-6 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 font-display text-lg font-bold text-destructive">
               <CircleAlert className="size-5" /> Permanently Delete Account?
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 text-sm text-muted-foreground pt-1">
-            <p>
-              This action will permanently delete your citizen profile, phone records, and
-              authentication account from Bolo Civic Connect.
-            </p>
-            <p className="text-xs text-destructive/90 font-medium">
-              This action is permanent and cannot be undone (Article 17 Right to Erasure).
-            </p>
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmOpen(false)}
-                className="inline-flex h-10 flex-1 items-center justify-center rounded-xl border border-border text-sm font-semibold transition-colors hover:bg-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteAccount}
-                disabled={deletingAccount}
-                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60"
-              >
-                {deletingAccount ? (
-                  <BSpinnerToCheck size={18} color="#ffffff" bg="#dc2626" />
-                ) : null}
-                {deletingAccount ? "Deleting…" : "Confirm Delete"}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground space-y-2 pt-1">
+              <p>
+                This action will permanently delete your citizen profile, phone records, and authentication credentials from Bolo Civic Connect.
+              </p>
+              <p className="text-xs text-destructive font-medium">
+                This action is permanent and cannot be undone (Article 17 Right to Erasure).
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 pt-2 sm:gap-2">
+            <AlertDialogCancel className="rounded-xl border-border">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingAccount ? (
+                <BSpinnerToCheck size={18} color="#ffffff" bg="#dc2626" />
+              ) : null}
+              {deletingAccount ? "Deleting…" : "Confirm Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Support Dialog ── */}
       <Dialog open={supportDialogOpen} onOpenChange={setSupportDialogOpen}>
@@ -761,13 +860,12 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
           </DialogHeader>
           <div className="space-y-3 pt-2 text-sm text-muted-foreground">
             <p>Need assistance or have an urgent civic emergency in your neighbourhood?</p>
-            <div className="rounded-2xl bg-secondary/50 p-4 text-foreground">
+            <Card className="rounded-2xl bg-secondary/50 p-4 border-border text-foreground shadow-none">
               <p className="font-semibold">Bolo Civic Connect Helpline</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Email: themayankdhodi@gmail.com
               </p>
-              {/* <p className="text-xs text-muted-foreground">Toll Free: 1800-BOLO-CIVIC (9 AM – 6 PM)</p> */}
-            </div>
+            </Card>
           </div>
         </DialogContent>
       </Dialog>
@@ -780,34 +878,39 @@ export function ProfilePanel({ children }: { children: React.ReactNode }) {
               <HelpCircle className="size-5 text-primary" /> FAQ (Frequently Asked Questions)
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 pt-2 text-sm text-muted-foreground">
-            <div className="space-y-1.5">
-              <p className="font-semibold text-foreground">1. How do I report a civic problem?</p>
-              <p className="text-xs leading-relaxed">
-                Click "Raise an Issue" in the navigation bar. You can upload photos, take a photo
-                directly with your camera, add the location, and submit your report.
-              </p>
+          <ScrollArea className="max-h-[60vh] pr-2">
+            <div className="space-y-3 pt-2 text-sm text-muted-foreground">
+              <div className="space-y-1.5">
+                <p className="font-semibold text-foreground">1. How do I report a civic problem?</p>
+                <p className="text-xs leading-relaxed">
+                  Click "Raise an Issue" in the navigation bar. You can upload photos, take a photo
+                  directly with your camera, add the location, and submit your report.
+                </p>
+              </div>
+              <Separator />
+              <div className="space-y-1.5 pt-2">
+                <p className="font-semibold text-foreground">
+                  2. How are complaint statuses updated?
+                </p>
+                <p className="text-xs leading-relaxed">
+                  Issues transition from <strong>Problem Reported</strong> →{" "}
+                  <strong>Work in Progress</strong> → <strong>Problem Solved</strong> as municipal
+                  crews and community leaders take action.
+                </p>
+              </div>
+              <Separator />
+              <div className="space-y-1.5 pt-2">
+                <p className="font-semibold text-foreground">
+                  3. Is my identity visible to the public?
+                </p>
+                <p className="text-xs leading-relaxed">
+                  Only your chosen display name is shown on public reports. Your phone number and
+                  account ID remain private and secure.
+                </p>
+              </div>
             </div>
-            <div className="space-y-1.5 pt-2 border-t border-border">
-              <p className="font-semibold text-foreground">
-                2. How are complaint statuses updated?
-              </p>
-              <p className="text-xs leading-relaxed">
-                Issues transition from <strong>Problem Reported</strong> →{" "}
-                <strong>Work in Progress</strong> → <strong>Problem Solved</strong> as municipal
-                crews and community leaders take action.
-              </p>
-            </div>
-            <div className="space-y-1.5 pt-2 border-t border-border">
-              <p className="font-semibold text-foreground">
-                3. Is my identity visible to the public?
-              </p>
-              <p className="text-xs leading-relaxed">
-                Only your chosen display name is shown on public reports. Your phone number, and
-                account ID remain secure.
-              </p>
-            </div>
-          </div>
+            <ScrollBar orientation="vertical" />
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 

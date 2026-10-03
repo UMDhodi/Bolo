@@ -8,6 +8,9 @@ import { LanguageSelector } from "@/components/site-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
 import { useLanguage, useT } from "@/components/language-context";
@@ -256,22 +259,23 @@ function RaisePage() {
                   </span>
                   <p className="max-w-sm text-sm text-muted-foreground">{t.raise.photosHint}</p>
                   <div className="flex flex-wrap items-center justify-center gap-3">
-                    <button
+                    <Button
                       type="button"
                       onClick={() => inputRef.current?.click()}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                      className="rounded-full px-5 text-sm font-semibold"
                     >
-                      <ImagePlus className="size-4" aria-hidden="true" />
+                      <ImagePlus className="size-4 mr-2" aria-hidden="true" />
                       {t.raise.browse}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="outline"
                       onClick={() => setCameraOpen(true)}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-full border border-primary bg-background px-5 text-sm font-semibold text-primary shadow-soft transition-colors hover:bg-primary/10"
+                      className="rounded-full border-primary text-primary px-5 text-sm font-semibold hover:bg-primary/10"
                     >
-                      <Camera className="size-4" aria-hidden="true" />
+                      <Camera className="size-4 mr-2" aria-hidden="true" />
                       {t.raise.takePhoto}
-                    </button>
+                    </Button>
                   </div>
                   <input
                     ref={inputRef}
@@ -372,15 +376,15 @@ function RaisePage() {
               onBlur={() => setTouched((s) => ({ ...s, location: true }))}
             />
             <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-secondary/60 p-3">
-              <button
+              <Button
                 type="button"
                 onClick={useCurrentLocation}
                 disabled={locating}
-                className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-full px-4 text-sm font-semibold"
               >
-                <LocateFixed className="size-4" aria-hidden="true" />
+                <LocateFixed className="size-4 mr-2" aria-hidden="true" />
                 {locating ? "Getting location…" : "Use my live location"}
-              </button>
+              </Button>
               <p className="text-xs font-medium text-muted-foreground">
                 {coordinates
                   ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)} attached`
@@ -428,23 +432,26 @@ function RaisePage() {
             </div>
           </Group>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border bg-card p-5 shadow-soft">
-            <p className="max-w-sm text-xs text-muted-foreground">{t.disclaimer}</p>
-            <button
-              type="submit"
-              disabled={!valid || submitting}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full bg-primary px-8 text-base font-semibold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-            >
-              {submitting ? (
-                <>
-                  <SpinnerToCheck size={22} color="#ffffff" bg="#0f766e" />
-                  {t.raise.submitting}
-                </>
-              ) : (
-                t.raise.submit
-              )}
-            </button>
-          </div>
+          <Card className="rounded-3xl border-border bg-card p-5 shadow-soft">
+            <CardContent className="p-0 flex flex-wrap items-center justify-between gap-4">
+              <p className="max-w-sm text-xs text-muted-foreground">{t.disclaimer}</p>
+              <Button
+                type="submit"
+                size="lg"
+                disabled={!valid || submitting}
+                className="rounded-full px-8 text-base font-semibold shadow-soft"
+              >
+                {submitting ? (
+                  <>
+                    <SpinnerToCheck size={22} color="#ffffff" bg="#0f766e" />
+                    <span className="ml-2">{t.raise.submitting}</span>
+                  </>
+                ) : (
+                  t.raise.submit
+                )}
+              </Button>
+            </CardContent>
+          </Card>
         </form>
       </main>
 
@@ -459,18 +466,24 @@ function RaisePage() {
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <fieldset className="rounded-3xl border border-border bg-card p-5 shadow-soft md:p-6">
-      <legend className="px-2 font-display text-sm font-bold tracking-wide text-primary uppercase">
-        {title}
-      </legend>
-      <div className="flex flex-col gap-4 pt-2">{children}</div>
-    </fieldset>
+    <Card className="rounded-3xl border-border bg-card shadow-soft overflow-hidden">
+      <CardHeader className="p-5 pb-2 md:p-6 md:pb-2 border-b border-border/40 bg-secondary/20">
+        <CardTitle className="font-display text-sm font-bold tracking-wide text-primary uppercase">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 p-5 md:p-6">{children}</CardContent>
+    </Card>
   );
 }
 
 function Req() {
   const t = useT();
-  return <span className="text-xs font-medium text-muted-foreground">({t.raise.required})</span>;
+  return (
+    <Badge variant="outline" className="ml-1 text-[10px] font-medium text-muted-foreground py-0 px-1.5 border-border">
+      {t.raise.required}
+    </Badge>
+  );
 }
 
 function FieldError({ message }: { message?: string | undefined }) {
