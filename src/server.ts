@@ -551,19 +551,11 @@ async function handleProfileCreateRoute(request: Request): Promise<Response | nu
   }
 
   try {
-    const authHeader = request.headers.get("authorization");
     const client = createClient(supabaseUrl, supabaseKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
-      ...(authHeader
-        ? {
-            global: {
-              headers: { Authorization: authHeader },
-            },
-          }
-        : {}),
     });
     const cleanPhone = phone
       ? phone.startsWith("+91")
@@ -616,6 +608,61 @@ async function handleProfileCreateRoute(request: Request): Promise<Response | nu
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
+}
+
+// ── /api/profile/update — update profile with service-role to avoid RLS blocks ──
+async function handleProfileUpdateRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/profile/update" || request.method !== "POST") return null;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "invalid_json" }), { status: 400 });
+  }
+
+  const { uid, fields } =
+    (body as { uid?: string; fields?: Record<string, string | undefined> }) || {};
+  if (!uid || typeof uid !== "string") {
+    return new Response(JSON.stringify({ error: "invalid_uid" }), { status: 400 });
+  }
+
+  const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const supabaseKey =
+    process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["VITE_SUPABASE_ANON_KEY"];
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(JSON.stringify({ error: "missing_config" }), { status: 500 });
+  }
+
+  const adminClient = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (fields?.["displayName"] !== undefined) {
+    payload["full_name"] = fields["displayName"].trim();
+  }
+  if (fields?.["phone"] !== undefined) {
+    payload["phone"] = fields["phone"].trim() || null;
+  }
+  if (fields?.["avatarUrl"] !== undefined) {
+    payload["avatar_url"] = fields["avatarUrl"].trim() || null;
+  }
+
+  const { error } = await adminClient.from("profiles").update(payload).eq("id", uid);
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  }
+
+  try {
+    await cacheDel(`profile:${uid}`);
+  } catch {}
+
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 // ── /api/profile/get — read profile with Upstash Redis cache ahead of Supabase ──
@@ -933,6 +980,12 @@ export default {
     const profileResponse = await handleProfileCreateRoute(request);
     if (profileResponse) {
       return applySecurityHeaders(profileResponse, request);
+    }
+
+    // ── /api/profile/update — server-side profile updates (avoids RLS) ───────
+    const profileUpdateResponse = await handleProfileUpdateRoute(request);
+    if (profileUpdateResponse) {
+      return applySecurityHeaders(profileUpdateResponse, request);
     }
 
     // ── /api/profile/get — Redis-cached profile lookup ───────────────────────

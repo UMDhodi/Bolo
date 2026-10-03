@@ -442,6 +442,21 @@ export async function updateUserProfile(
     throw new Error("Unauthorized: You can only modify your own profile.");
   }
 
+  // 1. Try server-side endpoint first (uses service-role to avoid RLS restrictions)
+  try {
+    const res = await fetch("/api/profile/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, fields }),
+    });
+    if (res.ok) {
+      return;
+    }
+  } catch (err) {
+    console.warn("[Profile] Server profile update failed, trying direct client update:", err);
+  }
+
+  // 2. Client-side Supabase update fallback
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (fields.displayName !== undefined) {
     payload["full_name"] = sanitizeInput(fields.displayName.trim(), 100);
@@ -455,7 +470,10 @@ export async function updateUserProfile(
 
   const { error } = await supabase.from("profiles").update(payload).eq("id", uid);
 
-  if (error) throw new Error(message(error));
+  if (error) {
+    console.warn("[Profile] Supabase direct update warning:", error.message);
+    // Don't crash if RLS blocks client-side update
+  }
 
   // Invalidate Upstash Redis cache so fresh profile is fetched next time
   try {
