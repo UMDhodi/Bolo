@@ -11,11 +11,11 @@ export type Issue = {
   id: string;
   title: string;
   reporter: string;
-  reporterUid?: string;
-  userId?: string;
-  reporterEmail?: string | null;
-  reporterPhone?: string | null;
-  createdAt?: number;
+  reporterUid?: string | undefined;
+  userId?: string | undefined;
+  reporterEmail?: string | null | undefined;
+  reporterPhone?: string | null | undefined;
+  createdAt?: number | undefined;
   date: string; // ISO
   status: IssueStatus;
   category: string;

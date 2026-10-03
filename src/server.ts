@@ -1,10 +1,17 @@
+try {
+  process.loadEnvFile?.(".env.local");
+} catch {}
+try {
+  process.loadEnvFile?.(".env");
+} catch {}
+
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
 // ── New infrastructure services (server-side only) ────────────────────────────
-import { getAvatarUploadTicket } from "./lib/r2";
+import { getAvatarUploadTicket, uploadDirectToR2 } from "./lib/r2";
 import {
   checkAuthRateLimit,
   checkOtpSendRateLimit,
@@ -23,6 +30,7 @@ import {
   otpSendSchema,
   otpVerifySchema,
   avatarUploadRequestSchema,
+  directUploadRequestSchema,
   authGuardSchema,
   profileCreateSchema,
 } from "./lib/zod-schemas";
@@ -376,6 +384,66 @@ async function handleAvatarUploadRoute(request: Request): Promise<Response | nul
       JSON.stringify({
         error: "upload_ticket_failed",
         message: err instanceof Error ? err.message : "Failed to generate upload URL.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
+
+// ── /api/upload/direct — server-side direct R2 upload (bypasses browser CORS) ───
+async function handleDirectUploadRoute(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/upload/direct" || request.method !== "POST") {
+    return null;
+  }
+
+  const ip = getClientIp(request);
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "invalid_json", message: "Request body must be JSON." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const parsed = parseBody(directUploadRequestSchema, body);
+  if (!parsed.ok) return parsed.response;
+
+  const { userId, mimeType, folder, fileData } = parsed.data;
+
+  // Rate limit: per user
+  const rl = await checkUploadRateLimit(userId);
+  if (!rl.allowed) return tooManyRequestsResponse(rl.reset);
+
+  // Rate limit: per IP
+  const ipRl = await checkAuthRateLimit(ip);
+  if (!ipRl.allowed) return tooManyRequestsResponse(ipRl.reset);
+
+  try {
+    const base64Index = fileData.indexOf("base64,");
+    const rawB64 = base64Index !== -1 ? fileData.slice(base64Index + 7) : fileData;
+    const buffer = Buffer.from(rawB64, "base64");
+
+    if (buffer.length > 15 * 1024 * 1024) {
+      return new Response(
+        JSON.stringify({ error: "file_too_large", message: "File exceeds 15 MB limit." }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const publicUrl = await uploadDirectToR2(userId, buffer, mimeType, folder || "avatars");
+    return new Response(JSON.stringify({ publicUrl }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("[DirectUpload] Error:", err);
+    return new Response(
+      JSON.stringify({
+        error: "upload_failed",
+        message: err instanceof Error ? err.message : "Failed to upload file to storage.",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
@@ -883,6 +951,12 @@ export default {
     const issuesResponse = await handleIssuesRoute(request);
     if (issuesResponse) {
       return applySecurityHeaders(issuesResponse, request);
+    }
+
+    // ── /api/upload/direct — server-side direct R2 upload ───────────────────
+    const directUploadResponse = await handleDirectUploadRoute(request);
+    if (directUploadResponse) {
+      return applySecurityHeaders(directUploadResponse, request);
     }
 
     // ── /api/upload/avatar & /api/upload/file — signed R2 upload URL ─────────

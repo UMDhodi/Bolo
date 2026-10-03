@@ -85,6 +85,13 @@ export const avatarUploadRequestSchema = z.object({
   folder: z.enum(["avatars", "issues", "media"]).default("avatars").optional(),
 });
 
+export const directUploadRequestSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  mimeType: mimeTypeSchema,
+  folder: z.enum(["avatars", "issues", "media"]).default("avatars").optional(),
+  fileData: z.string().min(1, "File data is required"),
+});
+
 // ---------------------------------------------------------------------------
 // Helper: parse + respond
 // ---------------------------------------------------------------------------

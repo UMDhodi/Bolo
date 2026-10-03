@@ -16,7 +16,15 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 // ---------------------------------------------------------------------------
 
 function getEnv(key: string): string {
-  const val = process.env[key];
+  if (!process.env[key] && !process.env[`VITE_${key}`]) {
+    try {
+      process.loadEnvFile?.(".env.local");
+    } catch {}
+    try {
+      process.loadEnvFile?.(".env");
+    } catch {}
+  }
+  const val = process.env[key] || process.env[`VITE_${key}`];
   if (!val) throw new Error(`[R2] Missing env var: ${key}`);
   return val;
 }
@@ -104,6 +112,48 @@ export async function getAvatarUploadTicket(
     publicUrl: `${publicBaseUrl}/${key}`,
     key,
   };
+}
+
+/**
+ * Directly upload a file buffer to Cloudflare R2 server-side.
+ * Eliminates browser CORS issues and presigned URL roundtrip failures.
+ */
+export async function uploadDirectToR2(
+  userId: string,
+  buffer: Buffer | Uint8Array,
+  mimeType: string,
+  folder: "avatars" | "issues" | "media" = "avatars",
+): Promise<string> {
+  if (!ALLOWED_AVATAR_TYPES.has(mimeType)) {
+    throw new Error(
+      `Invalid file type: ${mimeType}. Only JPEG, PNG, WebP and GIF are allowed.`,
+    );
+  }
+  const bucket = getEnv("R2_BUCKET");
+  const publicBaseUrl = (
+    process.env["R2_PUBLIC_URL"] ||
+    process.env["VITE_R2_PUBLIC_URL"] ||
+    `https://${bucket}.r2.dev`
+  ).replace(/\/$/, "");
+
+  const ext = mimeType.split("/")[1] ?? "jpg";
+  const key =
+    folder === "avatars"
+      ? `avatars/${userId}/avatar.${ext}`
+      : `${folder}/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const client = buildR2Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: mimeType,
+      Body: buffer,
+      Metadata: { "uploaded-by": userId, folder },
+    }),
+  );
+
+  return `${publicBaseUrl}/${key}`;
 }
 
 // ---------------------------------------------------------------------------
