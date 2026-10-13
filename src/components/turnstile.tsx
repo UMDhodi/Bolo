@@ -118,12 +118,7 @@ export const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
     }, [siteKey, action, onVerify, onError, onExpire]);
 
     if (isDevFallback) {
-      return (
-        <div className={`text-xs text-muted-foreground/70 flex items-center justify-center gap-1.5 py-1 ${className || ""}`}>
-          <span className="inline-block size-2 rounded-full bg-emerald-500/70" />
-          <span>Security Guard Active</span>
-        </div>
-      );
+      return null;
     }
 
     return (

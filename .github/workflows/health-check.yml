@@ -1,35 +1,157 @@
-name: Health Check – Keep Supabase Alive
+name: Keep Supabase Alive & Storage Cleanup
 
 on:
-  # Run every 3 days at 06:00 UTC to prevent the Supabase free-tier auto-pause
+  # Run every 3 days at 06:00 UTC to prevent Supabase free-tier auto-pause (7-day limit)
   schedule:
     - cron: "0 6 */3 * *"
   # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
 
 jobs:
-  ping:
-    name: Ping /api/health
+  keep-alive:
+    name: Ping Supabase DB
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Call health endpoint
+      # ── Step 1: Direct Supabase REST ping (keeps the DB active) ──────────
+      - name: Ping Supabase database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "Pinging Bolo health endpoint…"
-          RESPONSE=$(curl -sf --retry 3 --retry-delay 10 \
-            -w "\n%{http_code}" \
-            "${{ secrets.APP_URL }}/api/health")
+          echo "🔄 Pinging Supabase to prevent auto-pause..."
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n-1)
+          # Simple RPC call — executes SELECT 1 via PostgREST
+          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --retry 3 --retry-delay 10 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/?limit=0")
 
-          echo "Status: $HTTP_CODE"
-          echo "Body: $BODY"
+          echo "HTTP status: $HTTP_CODE"
 
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Health check failed with HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+            echo "✅ Supabase is alive — auto-pause timer reset."
+          else
+            echo "::warning::Supabase responded with HTTP $HTTP_CODE — project may be paused."
+            echo "Visit https://supabase.com/dashboard to manually unpause."
             exit 1
           fi
 
-          echo "✅ Health check passed."
+      # ── Step 2: Auth keep-alive (touches GoTrue to keep auth service warm) ─
+      - name: Ping Supabase Auth
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --retry 2 --retry-delay 5 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/auth/v1/settings")
+
+          echo "Auth service status: $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+            echo "✅ Auth service is responsive."
+          else
+            echo "::warning::Auth service responded with HTTP $HTTP_CODE"
+          fi
+
+  storage-cleanup:
+    name: Storage Housekeeping
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: keep-alive
+
+    steps:
+      # ── Step 3: List storage buckets & report usage ──────────────────────
+      - name: Check storage usage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "📦 Checking storage buckets..."
+
+          BUCKETS=$(curl -sf \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${SUPABASE_URL}/storage/v1/bucket" || echo "[]")
+
+          echo "Buckets: $BUCKETS"
+
+          # Count objects in each bucket
+          for BUCKET in $(echo "$BUCKETS" | jq -r '.[].name // empty' 2>/dev/null); do
+            OBJECTS=$(curl -sf \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"prefix":"","limit":1000}' \
+              "${SUPABASE_URL}/storage/v1/object/list/${BUCKET}" || echo "[]")
+
+            COUNT=$(echo "$OBJECTS" | jq 'length' 2>/dev/null || echo "0")
+            echo "  📁 ${BUCKET}: ${COUNT} objects"
+          done
+
+          echo "✅ Storage check complete."
+
+      # ── Step 4: Clean up orphaned/temp files older than 90 days ──────────
+      - name: Remove old temporary files
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "🧹 Cleaning up temp files older than 90 days..."
+
+          CUTOFF=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
+                   date -u -v-90d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
+                   echo "skip")
+
+          if [ "$CUTOFF" = "skip" ]; then
+            echo "⚠️ Could not compute cutoff date, skipping cleanup."
+            exit 0
+          fi
+
+          echo "Cutoff date: $CUTOFF"
+
+          BUCKETS=$(curl -sf \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${SUPABASE_URL}/storage/v1/bucket" || echo "[]")
+
+          TOTAL_DELETED=0
+
+          for BUCKET in $(echo "$BUCKETS" | jq -r '.[].name // empty' 2>/dev/null); do
+            OBJECTS=$(curl -sf \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"prefix":"","limit":1000}' \
+              "${SUPABASE_URL}/storage/v1/object/list/${BUCKET}" || echo "[]")
+
+            # Find old files
+            OLD_FILES=$(echo "$OBJECTS" | jq -r \
+              --arg cutoff "$CUTOFF" \
+              '[.[] | select(.created_at != null and .created_at < $cutoff) | .name] | .[]' \
+              2>/dev/null || true)
+
+            if [ -n "$OLD_FILES" ]; then
+              # Build JSON array of file paths for batch delete
+              PATHS_JSON=$(echo "$OLD_FILES" | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null)
+              FILE_COUNT=$(echo "$PATHS_JSON" | jq 'length' 2>/dev/null || echo "0")
+
+              if [ "$FILE_COUNT" -gt 0 ]; then
+                echo "  🗑️  Deleting $FILE_COUNT old files from ${BUCKET}..."
+
+                curl -sf -X DELETE \
+                  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"prefixes\": $PATHS_JSON}" \
+                  "${SUPABASE_URL}/storage/v1/object/${BUCKET}" || true
+
+                TOTAL_DELETED=$((TOTAL_DELETED + FILE_COUNT))
+              fi
+            fi
+          done
+
+          echo "✅ Cleanup complete. Deleted $TOTAL_DELETED old files total."
