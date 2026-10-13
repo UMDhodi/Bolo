@@ -18,18 +18,20 @@ jobs:
       - name: Ping Supabase database
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "🔄 Pinging Supabase to prevent auto-pause..."
 
-          # Simple RPC call — executes SELECT 1 via PostgREST
-          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
+          # Use service role key (valid JWT) for the keep-alive ping
+          HTTP_CODE=$(curl -s -o /tmp/sb_response.txt -w "%{http_code}" \
             --retry 3 --retry-delay 10 \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             "${SUPABASE_URL}/rest/v1/?limit=0")
 
           echo "HTTP status: $HTTP_CODE"
+          cat /tmp/sb_response.txt 2>/dev/null || true
+          echo ""
 
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
             echo "✅ Supabase is alive — auto-pause timer reset."
@@ -43,11 +45,11 @@ jobs:
       - name: Ping Supabase Auth
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             --retry 2 --retry-delay 5 \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             "${SUPABASE_URL}/auth/v1/settings")
 
           echo "Auth service status: $HTTP_CODE"
@@ -72,7 +74,7 @@ jobs:
         run: |
           echo "📦 Checking storage buckets..."
 
-          BUCKETS=$(curl -sf \
+          BUCKETS=$(curl -s \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             "${SUPABASE_URL}/storage/v1/bucket" || echo "[]")
@@ -81,7 +83,7 @@ jobs:
 
           # Count objects in each bucket
           for BUCKET in $(echo "$BUCKETS" | jq -r '.[].name // empty' 2>/dev/null); do
-            OBJECTS=$(curl -sf \
+            OBJECTS=$(curl -s \
               -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Content-Type: application/json" \
@@ -113,7 +115,7 @@ jobs:
 
           echo "Cutoff date: $CUTOFF"
 
-          BUCKETS=$(curl -sf \
+          BUCKETS=$(curl -s \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             "${SUPABASE_URL}/storage/v1/bucket" || echo "[]")
@@ -121,7 +123,7 @@ jobs:
           TOTAL_DELETED=0
 
           for BUCKET in $(echo "$BUCKETS" | jq -r '.[].name // empty' 2>/dev/null); do
-            OBJECTS=$(curl -sf \
+            OBJECTS=$(curl -s \
               -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Content-Type: application/json" \
@@ -142,7 +144,7 @@ jobs:
               if [ "$FILE_COUNT" -gt 0 ]; then
                 echo "  🗑️  Deleting $FILE_COUNT old files from ${BUCKET}..."
 
-                curl -sf -X DELETE \
+                curl -s -X DELETE \
                   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
                   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
